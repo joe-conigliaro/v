@@ -104,6 +104,28 @@ fn (mut g Gen) gen_fn_decl(it ast.FnDecl) {
 		g.writeln(');')
 		return
 	}
+	if it.is_anon && it.use_vars.len > 0 {
+		if it.args.len > 0 {
+			g.definitions.write(',')
+			g.write(',')
+		}
+		for i, v in it.use_vars {
+			match v {
+				ast.Ident{
+					info := v.var_info()
+					vstyp := g.typ(info.typ)
+					g.write('$vstyp ')
+					g.definitions.write('$vstyp ')
+				}
+				else {}
+			}
+			g.expr(v)
+			if i < it.use_vars.len-1 {
+				g.definitions.write(',')
+				g.write(',')
+			}
+		}
+	}
 	g.definitions.writeln(');')
 	g.writeln(') {')
 	if is_live_wrap {

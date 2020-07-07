@@ -349,6 +349,35 @@ fn (mut p Parser) anon_fn() ast.AnonFn {
 		stmts = p.parse_block_no_scope(false)
 	}
 	p.close_scope()
+	mut use_vars := []ast.Expr{}
+	has_use := p.tok.kind ==.key_use
+	if has_use {
+		p.next()
+		p.check(.lpar)
+		use_vars = p.expr_list()
+		// mut old_stmts := stmts
+		// stmts = []Stmt
+		for i, v in use_vars {
+			match v {
+				ast.Ident {
+					if parent_var := p.scope.parent.find_var(v.name) {
+						p.scope.register(parent_var.name, parent_var)
+						// stmts << ast.AssignStmt{left: [v], right}
+					}
+				}
+				else {}
+			}
+		}
+		p.check(.rpar)
+		// for p.tok != .rpar {
+		// 	use_vars << p.name()
+		// 	if p.tok.kind != .comma {
+		// 		break
+		// 	}
+		// 	p.next()
+		// }
+		// p.next()
+	}
 	mut func := table.Fn{
 		args: args
 		is_variadic: is_variadic
@@ -378,6 +407,7 @@ fn (mut p Parser) anon_fn() ast.AnonFn {
 			no_body: no_body
 			pos: pos
 			file: p.file_name
+			use_vars: use_vars
 		}
 		is_called: is_called
 		typ: typ

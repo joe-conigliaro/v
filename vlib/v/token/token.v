@@ -129,6 +129,7 @@ pub enum Kind {
 	key_pub
 	key_static
 	key_unsafe
+	key_use
 	keyword_end
 	_end_
 }
@@ -262,6 +263,7 @@ fn build_token_str() []string {
 	s[Kind.key_none] = 'none'
 	s[Kind.key_offsetof] = '__offsetof'
 	s[Kind.key_is] = 'is'
+	s[Kind.key_use] = 'use'
 	return s
 }
 

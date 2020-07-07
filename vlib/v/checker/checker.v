@@ -2075,6 +2075,9 @@ pub fn (mut c Checker) expr(node ast.Expr) table.Type {
 			keep_fn := c.cur_fn
 			c.cur_fn = &node.decl
 			c.stmts(node.decl.stmts)
+			for expr in node.decl.use_vars {
+				c.expr(expr)
+			}
 			c.cur_fn = keep_fn
 			return if node.is_called {
 				node.decl.return_type

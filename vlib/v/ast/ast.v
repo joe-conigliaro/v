@@ -242,6 +242,7 @@ pub:
 	file          string
 	is_generic    bool
 pub mut:
+	use_vars      []Expr
 	return_type   table.Type
 }
 
