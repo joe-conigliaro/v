@@ -993,14 +993,31 @@ fn (mut g Gen) expr_with_cast(expr ast.Expr, got_type, expected_type table.Type)
 			got_styp := g.typ(got_type)
 			exp_styp := g.typ(expected_type)
 			got_idx := got_type.idx()
+			exp_idx := expected_type.idx()
+			// if got_type.is_ptr() {
+			// 	g.write('/* sum type cast */ ($exp_styp) {.obj = ')
+			// 	g.expr(expr)
+			// 	g.write(', .typ = $got_idx /* $got_sym.name */}')
+			// } else {
+			// 	g.write('/* sum type cast */ ($exp_styp) {.obj = memdup(&($got_styp[]) {')
+			// 	g.expr(expr)
+			// 	g.write('}, sizeof($got_styp)), .typ = $got_idx /* $got_sym.name */}')
+			// }
 			if got_type.is_ptr() {
-				g.write('/* sum type cast */ ($exp_styp) {.obj = ')
+				g.write('/* sum type cast */ ($exp_styp) {.variant_$got_idx = ')
 				g.expr(expr)
 				g.write(', .typ = $got_idx /* $got_sym.name */}')
 			} else {
-				g.write('/* sum type cast */ ($exp_styp) {.obj = memdup(&($got_styp[]) {')
-				g.expr(expr)
-				g.write('}, sizeof($got_styp)), .typ = $got_idx /* $got_sym.name */}')
+				// if expr is ast.Ident {
+				// 	g.write('/* sum type cast */ ($exp_styp) {.variant_$got_idx = &')
+				// 	g.expr(expr)
+				// 	g.write(', .typ = $got_idx /* $got_sym.name */}')
+				// }
+				// else {
+					g.write('/* sum type cast */ ($exp_styp) {.variant_$got_idx = memdup(&($got_styp[]) {')
+					g.expr(expr)
+					g.write('}, sizeof($got_styp)), .typ = $got_idx /* $got_sym.name */}')
+				// }
 			}
 			return
 		}
@@ -2336,9 +2353,16 @@ fn (mut g Gen) match_expr(node ast.MatchExpr) {
 				ast.Type {
 					it_type := g.typ(first_expr.typ)
 					// g.writeln('$it_type* it = ($it_type*)${tmp}.obj; // ST it')
-					g.write('\t$it_type* it = ($it_type*)')
+					// g.write('\t$it_type* it = ($it_type*)')
+					// g.expr(node.cond)
+					// g.writeln('.obj; // ST it')
+					// if node.var_name.len > 0 {
+					// 	// for now we just copy it
+					// 	g.writeln('\t$it_type* $node.var_name = it;')
+					// }
+					g.write('\t$it_type* it = ')
 					g.expr(node.cond)
-					g.writeln('.obj; // ST it')
+					g.writeln('.variant_$first_expr.typ.idx(); // ST it')
 					if node.var_name.len > 0 {
 						// for now we just copy it
 						g.writeln('\t$it_type* $node.var_name = it;')
@@ -2485,14 +2509,23 @@ fn (mut g Gen) if_expr(node ast.IfExpr) {
 			right_type := infix.right as ast.Type
 			left_type := infix.left_type
 			it_type := g.typ(right_type.typ)
-			g.write('\t$it_type* _sc_tmp_$branch.pos.pos = ($it_type*)')
+			// g.write('\t$it_type* _sc_tmp_$branch.pos.pos = ($it_type*)')
+			// g.expr(infix.left)
+			// if left_type.is_ptr() {
+			// 	g.write('->')
+			// } else {
+			// 	g.write('.')
+			// }
+			// g.writeln('obj;')
+			// g.writeln('\t$it_type* $branch.left_as_name = _sc_tmp_$branch.pos.pos;')
+			g.write('\t$it_type* _sc_tmp_$branch.pos.pos = ')
 			g.expr(infix.left)
 			if left_type.is_ptr() {
 				g.write('->')
 			} else {
 				g.write('.')
 			}
-			g.writeln('obj;')
+			g.writeln('variant_$right_type.typ.idx();')
 			g.writeln('\t$it_type* $branch.left_as_name = _sc_tmp_$branch.pos.pos;')
 		}
 		g.stmts(branch.stmts)
@@ -3404,16 +3437,29 @@ fn (mut g Gen) write_types(types []table.TypeSymbol) {
 				// table.Alias, table.SumType { TODO
 			}
 			table.SumType {
-				g.type_definitions.writeln('')
-				g.type_definitions.writeln('// Sum type $name = ')
+				// g.type_definitions.writeln('')
+				// g.type_definitions.writeln('// Sum type $name = ')
+				// for sv in it.variants {
+				// 	g.type_definitions.writeln('//          | ${sv:4d} = ${g.typ(sv):-20s}')
+				// }
+				// g.type_definitions.writeln('typedef struct {')
+				// g.type_definitions.writeln('    void* obj;')
+				// g.type_definitions.writeln('    int typ;')
+				// g.type_definitions.writeln('} $name;')
+				// g.type_definitions.writeln('')
+
+				g.typedefs.writeln('typedef struct $name $name;')
+				g.type_definitions.writeln('struct $name {')
+				g.type_definitions.writeln('\tint typ;')
+				g.type_definitions.writeln('\tunion {')
 				for sv in it.variants {
-					g.type_definitions.writeln('//          | ${sv:4d} = ${g.typ(sv):-20s}')
+					// sv_sym := g.table.get_type_symbol(sv)
+					sv_styp := g.typ(sv)
+					g.type_definitions.writeln('\t\t$sv_styp* variant_$sv.idx();')
 				}
-				g.type_definitions.writeln('typedef struct {')
-				g.type_definitions.writeln('    void* obj;')
-				g.type_definitions.writeln('    int typ;')
-				g.type_definitions.writeln('} $name;')
-				g.type_definitions.writeln('')
+				g.type_definitions.writeln('\t}')
+				g.type_definitions.writeln('};')
+				// g.type_definitions.writeln('*/')
 			}
 			table.ArrayFixed {
 				// .array_fixed {
@@ -3449,20 +3495,24 @@ fn (g Gen) sort_structs(typesa []table.TypeSymbol) []table.TypeSymbol {
 		}
 		// create list of deps
 		mut field_deps := []string{}
-		match t.info {
+		match t.info as info {
 			table.ArrayFixed {
 				dep := g.table.get_type_symbol(it.elem_type).name
 				if dep in type_names {
 					field_deps << dep
 				}
 			}
+			// table.Interface {}
 			table.Struct {
-				info := t.info as table.Struct
 				// if info.is_interface {
 				// continue
 				// }
 				for field in info.fields {
-					dep := g.table.get_type_symbol(field.typ).name
+					dep_sym := g.table.get_type_symbol(field.typ)
+					dep := dep_sym.name
+					// if dep_sym.kind == .sum_type {
+					// 	continue
+					// }
 					// skip if not in types list or already in deps
 					if dep !in type_names || dep in field_deps || field.typ.is_ptr() {
 						continue
@@ -3470,7 +3520,15 @@ fn (g Gen) sort_structs(typesa []table.TypeSymbol) []table.TypeSymbol {
 					field_deps << dep
 				}
 			}
-			// table.Interface {}
+			// table.SumType {
+			// 	for variant in info.variants {
+			// 		dep := g.table.get_type_symbol(variant).name
+			// 		if dep in type_names {
+
+			// 			field_deps << dep
+			// 		}
+			// 	}
+			// }
 			else {}
 		}
 		// add type and dependant types to graph
@@ -4212,13 +4270,18 @@ fn (mut g Gen) as_cast(node ast.AsCast) {
 		g.write('.obj')
 		*/
 		dot := if node.expr_type.is_ptr() { '->' } else { '.' }
-		g.write('/* as */ ($styp*)__as_cast(')
+		// g.write('/* as */ ($styp*)__as_cast(')
+		// g.expr(node.expr)
+		// g.write(dot)
+		// g.write('obj, ')
+		// g.expr(node.expr)
+		// g.write(dot)
+		// g.write('typ, /*expected:*/$node.typ)')
+		// TODO add validation check
+		g.write('/* as */ ')
 		g.expr(node.expr)
 		g.write(dot)
-		g.write('obj, ')
-		g.expr(node.expr)
-		g.write(dot)
-		g.write('typ, /*expected:*/$node.typ)')
+		g.write('variant_$node.typ.idx()')
 	}
 }
 
