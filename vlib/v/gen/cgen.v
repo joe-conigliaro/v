@@ -263,10 +263,11 @@ pub fn (mut g Gen) init() {
 	g.write_builtin_types()
 	g.write_typedef_types()
 	g.write_typeof_functions()
-	if g.pref.build_mode != .build_module {
+
+	// if g.pref.build_mode != .build_module {
 		// _STR functions should not be defined in builtin.o
 		g.write_str_fn_definitions()
-	}
+	// }
 	g.write_sorted_types()
 	g.write_multi_return_types()
 	g.definitions.writeln('// end of definitions #endif')
@@ -306,6 +307,18 @@ pub fn (mut g Gen) init() {
 pub fn (mut g Gen) finish() {
 	if g.pref.build_mode != .build_module {
 		g.stringliterals.writeln('}')
+	}
+	// TEST need to reaplce all uses of id with this
+	for sym in g.table.types {
+		idx := g.table.type_idxs[sym.name]
+		styp := util.no_dots(sym.name)
+		if g.pref.build_mode == .build_module {
+			g.definitions.writeln('extern int vtype_${styp}_idx;')
+		}
+		else {
+			g.definitions.writeln('int vtype_${styp}_idx;')
+			g.inits[g.file.mod.name].writeln('\tvtype_${styp}_idx = $idx;')
+		}
 	}
 	g.stringliterals.writeln('// << string literal consts')
 	g.stringliterals.writeln('')
@@ -1019,24 +1032,25 @@ fn (mut g Gen) expr_with_cast(expr ast.Expr, got_type, expected_type table.Type)
 			got_styp := g.typ(got_type)
 			got_idx := got_type.idx()
 			got_sym := g.table.get_type_symbol(got_type)
+			got_typ_v := 'vtype_${util.no_dots(got_sym.name)}_idx'
 			if expected_is_ptr && got_is_ptr {
 				exp_der_styp := g.typ(expected_deref_type)
 				g.write('/* sum type cast */ ($exp_styp) memdup(&($exp_der_styp){.obj = ')
 				g.expr(expr)
-				g.write(', .typ = $got_idx /* $got_sym.name */}, sizeof($exp_der_styp))')
+				g.write(', .typ = $got_typ_v /* $got_sym.name */}, sizeof($exp_der_styp))')
 			} else if expected_is_ptr {
 				exp_der_styp := g.typ(expected_deref_type)
 				g.write('/* sum type cast */ ($exp_styp) memdup(&($exp_der_styp){.obj = memdup(&($got_styp[]) {')
 				g.expr(expr)
-				g.write('}, sizeof($got_styp)), .typ = $got_idx /* $got_sym.name */}, sizeof($exp_der_styp))')
+				g.write('}, sizeof($got_styp)), .typ = $got_typ_v /* $got_sym.name */}, sizeof($exp_der_styp))')
 			} else if got_is_ptr {
 				g.write('/* sum type cast */ ($exp_styp) {.obj = ')
 				g.expr(expr)
-				g.write(', .typ = $got_idx /* $got_sym.name */}')
+				g.write(', .typ = $got_typ_v /* $got_sym.name */}')
 			} else {
 				g.write('/* sum type cast */ ($exp_styp) {.obj = memdup(&($got_styp[]) {')
 				g.expr(expr)
-				g.write('}, sizeof($got_styp)), .typ = $got_idx /* $got_sym.name */}')
+				g.write('}, sizeof($got_styp)), .typ = $got_typ_v /* $got_sym.name */}')
 			}
 			return
 		}
@@ -1925,7 +1939,9 @@ fn (mut g Gen) expr(node ast.Expr) {
 			// g.write('/* Type */')
 			type_idx := node.typ.idx()
 			sym := g.table.get_type_symbol(node.typ)
-			g.write('$type_idx /* $sym.name */')
+			styp := g.typ(node.typ)
+			// g.write('$type_idx /* $sym.name */')
+			g.write('vtype_${styp}_idx /* $sym.name */')
 		}
 		ast.TypeOf {
 			g.typeof_expr(node)
@@ -3010,14 +3026,27 @@ fn (mut g Gen) const_decl(node ast.ConstDecl) {
 			ast.ArrayInit {
 				if it.is_fixed {
 					styp := g.typ(it.typ)
-					g.definitions.writeln('$styp _const_$name = $val; // fixed array const')
+					if g.pref.build_mode == .build_module {
+						g.definitions.writeln('extern $styp _const_$name; // fixed array const')
+					}
+					else {
+						g.definitions.writeln('$styp _const_$name = $val; // fixed array const')
+					}
 				} else {
 					g.const_decl_init_later(field.mod, name, val, field.typ)
 				}
 			}
 			ast.StringLiteral {
-				g.definitions.writeln('static string _const_$name; // a string literal, inited later')
-				if g.pref.build_mode != .build_module {
+				if g.pref.build_mode == .build_module {
+					g.definitions.writeln('extern string _const_$name; // a string literal, inited later')
+				}
+				else {
+					if g.pref.use_cache {
+						g.definitions.writeln('string _const_$name; // a string literal, inited later')
+					}
+					else {
+						g.definitions.writeln('static string _const_$name; // a string literal, inited later')
+					}
 					g.stringliterals.writeln('\t_const_$name = $val;')
 				}
 			}
@@ -3043,7 +3072,15 @@ fn (mut g Gen) const_decl_init_later(mod, name, val string, typ table.Type) {
 	styp := g.typ(typ)
 	//
 	cname := '_const_$name'
-	g.definitions.writeln('static $styp $cname; // inited later')
+	if g.pref.build_mode == .build_module {
+		g.definitions.writeln('extern $styp $cname; // inited later')
+	}
+	else if g.pref.use_cache {
+		g.definitions.writeln('$styp $cname; // inited later')
+	}
+	else {
+		g.definitions.writeln('static $styp $cname; // inited later')
+	}
 	g.inits[mod].writeln('\t$cname = $val;')
 	if g.pref.autofree {
 		if styp.starts_with('array_') {
