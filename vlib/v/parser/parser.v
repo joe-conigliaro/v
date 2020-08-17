@@ -36,8 +36,7 @@ mut:
 	pref              &pref.Preferences
 	builtin_mod       bool // are we in the `builtin` module?
 	mod               string // current module name
-	attrs             []string // attributes before next decl stmt
-	attr_ctdefine     string
+	attrs             []table.Attr // attributes before next decl stmt
 	expr_mod          string // for constructing full type names in parse_type()
 	scope             &ast.Scope
 	global_scope      &ast.Scope
@@ -183,13 +182,9 @@ fn (mut p Parser) parse() ast.File {
 			break
 		}
 		// println('stmt at ' + p.tok.str())
-		stmt := p.top_stmt()
-		// clear the attribtes at the end of next non Attr top level stmt
-		if stmt !is ast.Attr {
-			p.attrs = []
-			p.attr_ctdefine = ''
-		}
-		stmts << stmt
+		stmts << p.top_stmt()
+		// clear the attributes after each statement
+		p.attrs = []
 	}
 	// println('nr stmts = $stmts.len')
 	// println(stmts[0])
@@ -321,11 +316,20 @@ pub fn (mut p Parser) parse_block_no_scope(is_top_level bool) []ast.Stmt {
 	p.check(.lcbr)
 	mut stmts := []ast.Stmt{}
 	if p.tok.kind != .rcbr {
+		mut c := 0
 		for {
 			stmts << p.stmt(is_top_level)
 			// p.warn('after stmt(): tok=$p.tok.str()')
 			if p.tok.kind in [.eof, .rcbr] {
 				break
+			}
+			c++
+			if c % 100000 == 0 {
+				eprintln('parsed $c statements so far from fn $p.cur_fn_name ...')
+			}
+			if c > 1000000 {
+				p.error_with_pos('parsed over $c statements from fn $p.cur_fn_name, the parser is probably stuck',
+					p.tok.position())
 			}
 		}
 	}
@@ -399,96 +403,102 @@ pub fn (mut p Parser) top_stmt() ast.Stmt {
 		tok_pos := p.tok.position()
 		eprintln('parsing file: ${p.file_name:-30} | tok.kind: ${p.tok.kind:-10} | tok.lit: ${p.tok.lit:-10} | tok_pos: ${tok_pos.str():-45} | top_stmt')
 	}
-	match p.tok.kind {
-		.key_pub {
-			match p.peek_tok.kind {
-				.key_const {
-					return p.const_decl()
+	for {
+		match p.tok.kind {
+			.key_pub {
+				match p.peek_tok.kind {
+					.key_const {
+						return p.const_decl()
+					}
+					.key_fn {
+						return p.fn_decl()
+					}
+					.key_struct, .key_union {
+						return p.struct_decl()
+					}
+					.key_interface {
+						return p.interface_decl()
+					}
+					.key_enum {
+						return p.enum_decl()
+					}
+					.key_type {
+						return p.type_decl()
+					}
+					else {
+						p.error('wrong pub keyword usage')
+						return ast.Stmt{}
+					}
 				}
-				.key_fn {
-					return p.fn_decl()
-				}
-				.key_struct, .key_union {
-					return p.struct_decl()
-				}
-				.key_interface {
-					return p.interface_decl()
-				}
-				.key_enum {
-					return p.enum_decl()
-				}
-				.key_type {
-					return p.type_decl()
-				}
-				else {
-					p.error('wrong pub keyword usage')
+			}
+			.lsbr {
+				// attrs are stored in `p.attrs`
+				p.attributes()
+				continue
+			}
+			.key_interface {
+				return p.interface_decl()
+			}
+			.key_import {
+				p.error_with_pos('`import x` can only be declared at the beginning of the file',
+					p.tok.position())
+				return p.import_stmt()
+			}
+			.key_global {
+				return p.global_decl()
+			}
+			.key_const {
+				return p.const_decl()
+			}
+			.key_fn {
+				return p.fn_decl()
+			}
+			.key_struct {
+				return p.struct_decl()
+			}
+			.dollar {
+				return p.comp_if()
+			}
+			.hash {
+				return p.hash()
+			}
+			.key_type {
+				return p.type_decl()
+			}
+			.key_enum {
+				return p.enum_decl()
+			}
+			.key_union {
+				return p.struct_decl()
+			}
+			.comment {
+				return p.comment_stmt()
+			}
+			else {
+				if p.pref.is_script && !p.pref.is_test {
+					mut stmts := []ast.Stmt{}
+					for p.tok.kind != .eof {
+						stmts << p.stmt(false)
+					}
+					return ast.FnDecl{
+						name: 'main.main'
+						mod: 'main'
+						stmts: stmts
+						file: p.file_name
+						return_type: table.void_type
+					}
+				} else if p.pref.is_fmt {
+					return p.stmt(false)
+				} else {
+					p.error('bad top level statement ' + p.tok.str())
 					return ast.Stmt{}
 				}
 			}
 		}
-		.lsbr {
-			attrs := p.attributes(true)
-			return attrs[0]
-		}
-		.key_interface {
-			return p.interface_decl()
-		}
-		.key_import {
-			p.error_with_pos('`import x` can only be declared at the beginning of the file',
-				p.tok.position())
-			return p.import_stmt()
-		}
-		.key_global {
-			return p.global_decl()
-		}
-		.key_const {
-			return p.const_decl()
-		}
-		.key_fn {
-			return p.fn_decl()
-		}
-		.key_struct {
-			return p.struct_decl()
-		}
-		.dollar {
-			return p.comp_if()
-		}
-		.hash {
-			return p.hash()
-		}
-		.key_type {
-			return p.type_decl()
-		}
-		.key_enum {
-			return p.enum_decl()
-		}
-		.key_union {
-			return p.struct_decl()
-		}
-		.comment {
-			return p.comment_stmt()
-		}
-		else {
-			if p.pref.is_script && !p.pref.is_test {
-				mut stmts := []ast.Stmt{}
-				for p.tok.kind != .eof {
-					stmts << p.stmt(false)
-				}
-				return ast.FnDecl{
-					name: 'main.main'
-					mod: 'main'
-					stmts: stmts
-					file: p.file_name
-					return_type: table.void_type
-				}
-			} else if p.pref.is_fmt {
-				return p.stmt(false)
-			} else {
-				p.error('bad top level statement ' + p.tok.str())
-				return ast.Stmt{}
-			}
-		}
 	}
+	// TODO remove dummy return statement
+	// the compiler complains if it's not there
+	return ast.Stmt{}
 }
 
 // TODO [if vfmt]
@@ -592,6 +602,7 @@ pub fn (mut p Parser) stmt(is_top_level bool) ast.Stmt {
 					expr: p.vweb()
 				}
 			}
+			p.error_with_pos('unexpected \$', p.tok.position())
 			return ast.Stmt{}
 		}
 		.key_continue, .key_break {
@@ -602,13 +613,26 @@ pub fn (mut p Parser) stmt(is_top_level bool) ast.Stmt {
 			}
 		}
 		.key_unsafe {
-			p.next()
-			assert !p.inside_unsafe
-			p.inside_unsafe = true
-			stmts := p.parse_block()
-			p.inside_unsafe = false
-			return ast.UnsafeStmt{
-				stmts: stmts
+			if p.peek_tok.kind == .lcbr {
+				// unsafe {
+				p.next()
+				assert !p.inside_unsafe
+				p.inside_unsafe = true
+				stmts := p.parse_block()
+				p.inside_unsafe = false
+				return ast.Block{
+					stmts: stmts
+					is_unsafe: true
+				}
+			} else {
+				p.error_with_pos('please use `unsafe {`', p.tok.position())
+			}
+			// unsafe( ; NB: this will be never reached
+			pos := p.tok.position()
+			ex := p.expr(0)
+			return ast.ExprStmt{
+				expr: ex
+				pos: pos
 			}
 		}
 		.hash {
@@ -668,65 +692,82 @@ fn (mut p Parser) expr_list() ([]ast.Expr, []ast.Comment) {
 }
 
 // when is_top_stmt is true attrs are added to p.attrs
-fn (mut p Parser) attributes(is_top_stmt bool) []ast.Attr {
-	mut attrs := []ast.Attr{}
+fn (mut p Parser) attributes() {
 	p.check(.lsbr)
+	mut has_ctdefine := false
 	for p.tok.kind != .rsbr {
 		start_pos := p.tok.position()
 		attr := p.parse_attr()
-		if attr in attrs || (is_top_stmt && attr.name in p.attrs) {
+		if p.attrs.contains(attr.name) {
 			p.error_with_pos('duplicate attribute `$attr.name`', start_pos.extend(p.prev_tok.position()))
 		}
-		if is_top_stmt {
-			p.attrs << attr.name
+		if attr.is_ctdefine {
+			if has_ctdefine {
+				p.error_with_pos('only one `[if flag]` may be applied at a time `$attr.name`',
+					start_pos.extend(p.prev_tok.position()))
+			} else {
+				has_ctdefine = true
+			}
 		}
-		attrs << attr
+		p.attrs << attr
 		if p.tok.kind != .semicolon {
-			expected := `;`
 			if p.tok.kind == .rsbr {
 				p.next()
 				break
 			}
-			p.error('unexpected `$p.tok.kind.str()`, expecting `$expected.str()`')
+			p.error('unexpected `$p.tok.kind.str()`, expecting `;`')
 		}
 		p.next()
 	}
-	if attrs.len == 0 {
+	if p.attrs.len == 0 {
 		p.error_with_pos('attributes cannot be empty', p.prev_tok.position().extend(p.tok.position()))
 	}
-	return attrs
 }
 
-fn (mut p Parser) parse_attr() ast.Attr {
-	mut is_if_attr := false
+fn (mut p Parser) parse_attr() table.Attr {
+	if p.tok.kind == .key_unsafe {
+		p.next()
+		return table.Attr{
+			name: 'unsafe'
+		}
+	}
+	mut is_ctdefine := false
 	if p.tok.kind == .key_if {
 		p.next()
-		is_if_attr = true
+		is_ctdefine = true
 	}
 	mut name := ''
+	mut arg := ''
 	is_string := p.tok.kind == .string
+	mut is_string_arg := false
 	if is_string {
 		name = p.tok.lit
 		p.next()
 	} else {
-		mut name = p.check_name()
+		name = p.check_name()
+		if name == 'unsafe_fn' {
+			p.error_with_pos('please use `[unsafe]` instead', p.tok.position())
+		} else if name == 'trusted_fn' {
+			p.error_with_pos('please use `[trusted]` instead', p.tok.position())
+		}
 		if p.tok.kind == .colon {
-			name += ':'
 			p.next()
+			// `name: arg`
 			if p.tok.kind == .name {
-				name += p.check_name()
-			} else if p.tok.kind == .string {
-				name += p.tok.lit
+				arg = p.check_name()
+			} else if p.tok.kind == .string { // `name: 'arg'`
+				arg = p.tok.lit
+				is_string_arg = true
 				p.next()
 			}
 		}
 	}
-	if is_if_attr {
-		p.attr_ctdefine = name
-	}
-	return ast.Attr{
+	return table.Attr{
 		name: name
 		is_string: is_string
+		is_ctdefine: is_ctdefine
+		arg: arg
+		is_string_arg: is_string_arg
 	}
 }
 
@@ -812,8 +853,7 @@ fn (mut p Parser) parse_multi_expr(is_top_level bool) ast.Stmt {
 		return p.partial_assign_stmt(left, left_comments)
 	} else if is_top_level && tok.kind !in [.key_if, .key_match, .key_lock, .key_rlock] &&
 		left0 !is ast.CallExpr && left0 !is ast.PostfixExpr && !(left0 is ast.InfixExpr &&
-		(left0 as ast.InfixExpr).op == .left_shift) &&
-		left0 !is ast.ComptimeCall {
+		(left0 as ast.InfixExpr).op == .left_shift) && left0 !is ast.ComptimeCall {
 		p.error_with_pos('expression evaluated but not used', left0.position())
 	}
 	if left.len == 1 {
@@ -850,6 +890,7 @@ pub fn (mut p Parser) parse_ident(language table.Language) ast.Ident {
 		mut name := p.check_name()
 		if name == '_' {
 			return ast.Ident{
+				tok_kind: p.tok.kind
 				name: '_'
 				kind: .blank_ident
 				pos: pos
@@ -866,6 +907,7 @@ pub fn (mut p Parser) parse_ident(language table.Language) ast.Ident {
 			name = '${p.expr_mod}.$name'
 		}
 		return ast.Ident{
+			tok_kind: p.tok.kind
 			kind: .unresolved
 			name: name
 			language: language
@@ -916,6 +958,47 @@ pub fn (mut p Parser) name_expr() ast.Expr {
 			typ: map_type
 		}
 	}
+	// `chan typ{...}`
+	if p.tok.lit == 'chan' {
+		first_pos := p.tok.position()
+		mut last_pos := p.tok.position()
+		chan_type := p.parse_chan_type()
+		mut has_cap := false
+		mut cap_expr := ast.Expr{}
+		p.check(.lcbr)
+		if p.tok.kind == .rcbr {
+			last_pos = p.tok.position()
+			p.next()
+		} else {
+			key := p.check_name()
+			p.check(.colon)
+			match key {
+				'cap' {
+					has_cap = true
+					cap_expr = p.expr(0)
+				}
+				'len', 'init' {
+					p.error('`$key` cannot be initialized for `chan`. Did you mean `cap`?')
+				}
+				else {
+					p.error('wrong field `$key`, expecting `cap`')
+				}
+			}
+			last_pos = p.tok.position()
+			p.check(.rcbr)
+		}
+		pos := token.Position{
+			line_nr: first_pos.line_nr
+			pos: first_pos.pos
+			len: last_pos.pos - first_pos.pos + last_pos.len
+		}
+		return ast.ChanInit{
+			pos: pos
+			has_cap: has_cap
+			cap_expr: cap_expr
+			typ: chan_type
+		}
+	}
 	// Raw string (`s := r'hello \n ')
 	if p.tok.lit in ['r', 'c', 'js'] && p.peek_tok.kind == .string && !p.inside_str_interp {
 		return p.string_expr()
@@ -924,12 +1007,14 @@ pub fn (mut p Parser) name_expr() ast.Expr {
 	mut is_mod_cast := false
 	if p.peek_tok.kind == .dot && !known_var &&
 		(language != .v || p.known_import(p.tok.lit) || p.mod.all_after_last('.') == p.tok.lit) {
+		// p.tok.lit has been recognized as a module
 		if language == .c {
 			mod = 'C'
 		} else if language == .js {
 			mod = 'JS'
 		} else {
 			if p.tok.lit in p.imports {
+				// mark the imported module as used
 				p.register_used_import(p.tok.lit)
 				if p.peek_tok.kind == .dot && p.peek_tok2.lit[0].is_capital() {
 					is_mod_cast = true
@@ -956,8 +1041,8 @@ pub fn (mut p Parser) name_expr() ast.Expr {
 		// type cast. TODO: finish
 		// if name in table.builtin_type_names {
 		if (!known_var && (name in p.table.type_idxs ||
-			name_w_mod in p.table.type_idxs) &&
-			name !in ['C.stat', 'C.sigaction']) || is_mod_cast {
+			name_w_mod in p.table.type_idxs) && name !in ['C.stat', 'C.sigaction']) ||
+			is_mod_cast {
 			// TODO handle C.stat()
 			mut to_typ := p.parse_type()
 			if p.is_amp {
@@ -991,8 +1076,8 @@ pub fn (mut p Parser) name_expr() ast.Expr {
 			node = p.call_expr(language, mod)
 		}
 	} else if (p.peek_tok.kind == .lcbr ||
-		(p.peek_tok.kind == .lt && lit0_is_capital)) && !p.inside_match && !p.inside_match_case &&
-		!p.inside_if && !p.inside_for { // && (p.tok.lit[0].is_capital() || p.builtin_mod) {
+		(p.peek_tok.kind == .lt && lit0_is_capital)) &&
+		!p.inside_match && !p.inside_match_case && !p.inside_if && !p.inside_for { // && (p.tok.lit[0].is_capital() || p.builtin_mod) {
 		return p.struct_init(false) // short_syntax: false
 	} else if p.peek_tok.kind == .dot && (lit0_is_capital && !known_var && language == .v) {
 		// `Color.green`
@@ -1089,6 +1174,19 @@ fn (mut p Parser) scope_register_it() {
 	})
 }
 
+fn (mut p Parser) scope_register_ab() {
+	p.scope.register('a', ast.Var{
+		name: 'a'
+		pos: p.tok.position()
+		is_used: true
+	})
+	p.scope.register('b', ast.Var{
+		name: 'b'
+		pos: p.tok.position()
+		is_used: true
+	})
+}
+
 fn (mut p Parser) dot_expr(left ast.Expr) ast.Expr {
 	p.next()
 	if p.tok.kind == .dollar {
@@ -1105,6 +1203,10 @@ fn (mut p Parser) dot_expr(left ast.Expr) ast.Expr {
 		// defer {
 		// p.close_scope()
 		// }
+	} else if field_name == 'sort' {
+		p.open_scope()
+		name_pos = p.tok.position()
+		p.scope_register_ab()
 	}
 	// ! in mutable methods
 	if p.tok.kind == .not && p.peek_tok.kind == .lpar {
@@ -1164,7 +1266,7 @@ fn (mut p Parser) dot_expr(left ast.Expr) ast.Expr {
 				pos: pos
 			}
 		}
-		if is_filter {
+		if is_filter || field_name == 'sort' {
 			p.close_scope()
 		}
 		return mcall_expr
@@ -1339,7 +1441,20 @@ fn (mut p Parser) module_decl() ast.Module {
 		}
 		module_pos = module_pos.extend(pos)
 	}
-	full_mod := p.table.qualify_module(name, p.file_name)
+	mut full_mod := p.table.qualify_module(name, p.file_name)
+	if p.pref.build_mode == .build_module && !full_mod.contains('.') {
+		// A hack to make building vlib modules work
+		// `v build-module v.gen` will result in `full_mod = "gen"`, not "v.gen",
+		// because the module being built
+		// is not imported.
+		// So here we fetch the name of the module by looking at the path that's being built.
+		word := p.pref.path.after('/')
+		if full_mod == word {
+			full_mod = p.pref.path.after('vlib/').replace('/', '.')
+			// println('new full mod =$full_mod')
+		}
+		// println('file_name=$p.file_name path=$p.pref.path')
+	}
 	p.mod = full_mod
 	p.builtin_mod = p.mod == 'builtin'
 	return ast.Module{
@@ -1394,8 +1509,10 @@ fn (mut p Parser) import_stmt() ast.Import {
 		}
 	}
 	p.imports[mod_alias] = mod_name
+	// if mod_name !in p.table.imports {
 	p.table.imports << mod_name
 	p.ast_imports << node
+	// }
 	return node
 }
 
@@ -1542,8 +1659,7 @@ const (
 // left hand side of `=` or `:=` in `a,b,c := 1,2,3`
 fn (mut p Parser) global_decl() ast.GlobalDecl {
 	if !p.pref.translated && !p.pref.is_livemain && !p.builtin_mod && !p.pref.building_v &&
-		p.mod != 'ui' && p.mod != 'gg2' &&
-		p.mod != 'uiold' && !p.pref.enable_globals && !p.pref.is_fmt &&
+		p.mod != 'ui' && p.mod != 'gg2' && p.mod != 'uiold' && !p.pref.enable_globals && !p.pref.is_fmt &&
 		p.mod !in global_enabled_mods {
 		p.error('use `v --enable-globals ...` to enable globals')
 	}
@@ -1623,8 +1739,8 @@ fn (mut p Parser) enum_decl() ast.EnumDecl {
 	}
 	p.top_level_statement_end()
 	p.check(.rcbr)
-	is_flag := 'flag' in p.attrs
-	is_multi_allowed := '_allow_multiple_values' in p.attrs
+	is_flag := p.attrs.contains('flag')
+	is_multi_allowed := p.attrs.contains('_allow_multiple_values')
 	if is_flag {
 		if fields.len > 32 {
 			p.error('when an enum is used as bit field, it must have a max of 32 fields')

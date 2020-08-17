@@ -33,7 +33,7 @@ pub:
 	is_placeholder bool
 	mod            string
 	ctdefine       string // compile time define. myflag, when [if myflag] tag
-	attrs          []string
+	attrs          []Attr
 pub mut:
 	name           string
 }
@@ -112,12 +112,12 @@ pub fn (t &Table) known_fn(name string) bool {
 }
 
 pub fn (mut t Table) register_fn(new_fn Fn) {
-	//	println('reg fn $new_fn.name nr_args=$new_fn.args.len')
+	// println('reg fn $new_fn.name nr_args=$new_fn.args.len')
 	t.fns[new_fn.name] = new_fn
 }
 
 pub fn (mut t TypeSymbol) register_method(new_fn Fn) {
-	//	println('reg me $new_fn.name nr_args=$new_fn.args.len')
+	// println('reg me $new_fn.name nr_args=$new_fn.args.len')
 	t.methods << new_fn
 }
 
@@ -194,7 +194,23 @@ pub fn (t &Table) get_type_symbol(typ Type) &TypeSymbol {
 		return &t.types[idx]
 	}
 	// this should never happen
-	panic('get_type_symbol: invalid type (typ=$typ idx=${idx}). Compiler bug. This should never happen')
+	panic('get_type_symbol: invalid type (typ=$typ idx=$idx). Compiler bug. This should never happen')
+}
+
+// get_final_type_symbol follows aliases until it gets to a "real" Type
+[inline]
+pub fn (t &Table) get_final_type_symbol(typ Type) &TypeSymbol {
+	idx := typ.idx()
+	if idx > 0 {
+		current_type := t.types[idx]
+		if current_type.kind == .alias {
+			alias_info := current_type.info as Alias
+			return t.get_final_type_symbol(alias_info.parent_type)
+		}
+		return &t.types[idx]
+	}
+	// this should never happen
+	panic('get_final_type_symbol: invalid type (typ=$typ idx=$idx). Compiler bug. This should never happen')
 }
 
 [inline]
@@ -229,8 +245,7 @@ pub fn (mut t Table) register_builtin_type_symbol(typ TypeSymbol) int {
 					typ |
 					kind: existing_type.kind
 				}
-			}
-			else {
+			} else {
 				t.types[existing_idx] = typ
 			}
 		}
@@ -280,7 +295,7 @@ pub fn (t &Table) known_type(name string) bool {
 [inline]
 pub fn (t &Table) array_name(elem_type Type, nr_dims int) string {
 	elem_type_sym := t.get_type_symbol(elem_type)
-	return 'array_${elem_type_sym.name}' + if elem_type.is_ptr() {
+	return 'array_$elem_type_sym.name' + if elem_type.is_ptr() {
 		'_ptr'.repeat(elem_type.nr_muls())
 	} else {
 		''
@@ -294,7 +309,7 @@ pub fn (t &Table) array_name(elem_type Type, nr_dims int) string {
 [inline]
 pub fn (t &Table) array_fixed_name(elem_type Type, size, nr_dims int) string {
 	elem_type_sym := t.get_type_symbol(elem_type)
-	return 'array_fixed_${elem_type_sym.name}_${size}' + if elem_type.is_ptr() {
+	return 'array_fixed_${elem_type_sym.name}_$size' + if elem_type.is_ptr() {
 		'_ptr'
 	} else {
 		''
@@ -306,12 +321,38 @@ pub fn (t &Table) array_fixed_name(elem_type Type, size, nr_dims int) string {
 }
 
 [inline]
+pub fn (t &Table) chan_name(elem_type Type) string {
+	elem_type_sym := t.get_type_symbol(elem_type)
+	suffix := if elem_type.is_ptr() { '_ptr' } else { '' }
+	return 'chan_$elem_type_sym.name' + suffix
+}
+
+[inline]
 pub fn (t &Table) map_name(key_type, value_type Type) string {
 	key_type_sym := t.get_type_symbol(key_type)
 	value_type_sym := t.get_type_symbol(value_type)
 	suffix := if value_type.is_ptr() { '_ptr' } else { '' }
-	return 'map_${key_type_sym.name}_${value_type_sym.name}' + suffix
+	return 'map_${key_type_sym.name}_$value_type_sym.name' + suffix
 	// return 'map_${value_type_sym.name}' + suffix
+}
+
+pub fn (mut t Table) find_or_register_chan(elem_type Type) int {
+	name := t.chan_name(elem_type)
+	// existing
+	existing_idx := t.type_idxs[name]
+	if existing_idx > 0 {
+		return existing_idx
+	}
+	// register
+	chan_typ := TypeSymbol{
+		parent_idx: chan_type_idx
+		kind: .chan
+		name: name
+		info: Chan{
+			elem_type: elem_type
+		}
+	}
+	return t.register_type_symbol(chan_typ)
 }
 
 pub fn (mut t Table) find_or_register_map(key_type, value_type Type) int {
@@ -473,6 +514,7 @@ pub fn (t &Table) mktyp(typ Type) Type {
 // this is not optimal
 pub fn (table &Table) qualify_module(mod, file_path string) string {
 	for m in table.imports {
+		// if m.contains('gen') { println('qm=$m') }
 		if m.contains('.') && m.contains(mod) {
 			m_parts := m.split('.')
 			m_path := m_parts.join(os.path_separator)
@@ -484,7 +526,7 @@ pub fn (table &Table) qualify_module(mod, file_path string) string {
 	return mod
 }
 
-pub fn (table &Table) register_fn_gen_type(fn_name string, typ Type) {
+pub fn (mut table Table) register_fn_gen_type(fn_name string, typ Type) {
 	mut a := table.fn_gen_types[fn_name]
 	if typ in a {
 		return
@@ -495,12 +537,11 @@ pub fn (table &Table) register_fn_gen_type(fn_name string, typ Type) {
 	table.fn_gen_types[fn_name] = a
 }
 
-
 // TODO: there is a bug when casting sumtype the other way if its pointer
 // so until fixed at least show v (not C) error `x(variant) =  y(SumType*)`
-pub fn (table &Table) sumtype_has_variant(parent Type, variant Type) bool {
+pub fn (table &Table) sumtype_has_variant(parent, variant Type) bool {
 	parent_sym := table.get_type_symbol(parent)
-	if parent_sym.kind ==.sum_type {
+	if parent_sym.kind == .sum_type {
 		parent_info := parent_sym.info as SumType
 		for v in parent_info.variants {
 			if v.idx() == variant.idx() {
@@ -512,4 +553,15 @@ pub fn (table &Table) sumtype_has_variant(parent Type, variant Type) bool {
 		}
 	}
 	return false
+}
+
+pub fn (table &Table) known_type_names() []string {
+	mut res := []string{}
+	for _, idx in table.type_idxs {
+		if idx == 0 {
+			continue
+		}
+		res << table.type_to_str(idx)
+	}
+	return res
 }

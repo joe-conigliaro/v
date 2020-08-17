@@ -51,6 +51,13 @@ pub fn (mut p Parser) parse_map_type() table.Type {
 	return table.new_type(idx)
 }
 
+pub fn (mut p Parser) parse_chan_type() table.Type {
+	p.next()
+	elem_type := p.parse_type()
+	idx := p.table.find_or_register_chan(elem_type)
+	return table.new_type(idx)
+}
+
 pub fn (mut p Parser) parse_multi_return_type() table.Type {
 	p.check(.lpar)
 	mut mr_types := []table.Type{}
@@ -134,6 +141,9 @@ pub fn (mut p Parser) parse_type() table.Type {
 		nr_muls++
 		p.next()
 	}
+	if p.tok.kind == .mul {
+		p.error('use `&Type` instead of `*Type` when declaring references')
+	}
 	// &Type
 	for p.tok.kind == .amp {
 		nr_muls++
@@ -143,7 +153,7 @@ pub fn (mut p Parser) parse_type() table.Type {
 	mut typ := table.void_type
 	if p.tok.kind != .lcbr {
 		pos := p.tok.position()
-		typ = p.parse_any_type(language, nr_muls > 0)
+		typ = p.parse_any_type(language, nr_muls > 0, true)
 		if typ == table.void_type {
 			p.error_with_pos('use `?` instead of `?void`', pos)
 		}
@@ -163,13 +173,13 @@ pub fn (mut p Parser) parse_type() table.Type {
 	return typ
 }
 
-pub fn (mut p Parser) parse_any_type(language table.Language, is_ptr bool) table.Type {
+pub fn (mut p Parser) parse_any_type(language table.Language, is_ptr, check_dot bool) table.Type {
 	mut name := p.tok.lit
 	if language == .c {
 		name = 'C.$name'
 	} else if language == .js {
 		name = 'JS.$name'
-	} else if p.peek_tok.kind == .dot {
+	} else if p.peek_tok.kind == .dot && check_dot {
 		// `module.Type`
 		// /if !(p.tok.lit in p.table.imports) {
 		if !p.known_import(name) {
@@ -183,6 +193,9 @@ pub fn (mut p Parser) parse_any_type(language table.Language, is_ptr bool) table
 		p.check(.dot)
 		// prefix with full module
 		name = '${p.imports[name]}.$p.tok.lit'
+		if !p.tok.lit[0].is_capital() {
+			p.error('imported types must start with a capital letter')
+		}
 	} else if p.expr_mod != '' {
 		name = p.expr_mod + '.' + name
 	} else if p.mod != 'builtin' && name !in p.table.type_idxs && name.len > 1 {
@@ -211,8 +224,15 @@ pub fn (mut p Parser) parse_any_type(language table.Language, is_ptr bool) table
 			if name == 'map' {
 				return p.parse_map_type()
 			}
+			if name == 'chan' {
+				return p.parse_chan_type()
+			}
 			defer {
 				p.next()
+			}
+			if name == '' {
+				// This means the developer is using some wrong syntax like `x: int` instead of `x int`
+				p.error('bad type syntax')
 			}
 			match name {
 				'voidptr' {

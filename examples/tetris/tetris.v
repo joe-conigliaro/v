@@ -19,7 +19,7 @@ const (
 	win_width = block_size * field_width
 	win_height = block_size * field_height
 	timer_period = 250 // ms
-	text_size = 12
+	text_size = 24
 	limit_thickness = 3
 )
 
@@ -137,7 +137,7 @@ struct Game {
 const ( fpath = os.resource_abs_path('../assets/fonts/RobotoMono-Regular.ttf') )
 
 [if showfps]
-fn (game &Game) showfps() {
+fn (mut game Game) showfps() {
 	game.frame++
 	last_frame_ms := f64(game.frame_sw.elapsed().microseconds())/1000.0
 	ticks := f64(game.second_sw.elapsed().microseconds())/1000.0
@@ -149,7 +149,7 @@ fn (game &Game) showfps() {
 	}
 }
 
-fn frame(game &Game) {
+fn frame(mut game Game) {
 	game.frame_sw.restart()
 	game.gg.begin()
 	game.draw_scene()
@@ -301,7 +301,7 @@ fn (mut g Game) get_tetro() {
 }
 
 // TODO mut
-fn (g &Game) drop_tetro() {
+fn (mut g Game) drop_tetro() {
 	for i in 0..tetro_size{
 		tetro := g.tetro[i]
 		x := tetro.x + g.pos_x

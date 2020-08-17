@@ -1,9 +1,9 @@
 fn test_ptr_assign() {
-    v := 5
-    mut p := &v
-    p++
-    p += 2
-    _ := v
+	mut v := 5
+	mut p := &v
+	p++
+	p += 2
+	_ := v
 }
 
 fn test_ptr_infix() {
@@ -16,10 +16,22 @@ fn test_ptr_infix() {
 
 struct S1 {}
 
-[unsafe_fn]
+[unsafe]
 fn (s S1) f(){}
 
 fn test_funcs() {
     s := S1{}
     s.f()
+}
+
+fn test_ptr_index(mut a []string) {
+	_ = a[0]
+	b := ['jo']
+	_ = b[0]
+	c := &b
+	_ = c[0]
+
+    v := 4
+    p := &v
+    _ = p[0]
 }

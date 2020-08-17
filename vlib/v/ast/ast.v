@@ -10,15 +10,16 @@ import v.errors
 pub type TypeDecl = AliasTypeDecl | FnTypeDecl | SumTypeDecl
 
 pub type Expr = AnonFn | ArrayInit | AsCast | Assoc | BoolLiteral | CallExpr | CastExpr |
-	CharLiteral | Comment | ComptimeCall | ConcatExpr | EnumVal | FloatLiteral | Ident | IfExpr |
+	CharLiteral | ChanInit | Comment | ComptimeCall | ConcatExpr | EnumVal | FloatLiteral | Ident | IfExpr |
 	IfGuardExpr | IndexExpr | InfixExpr | IntegerLiteral | Likely | LockExpr | MapInit | MatchExpr |
 	None | OrExpr | ParExpr | PostfixExpr | PrefixExpr | RangeExpr | SelectorExpr | SizeOf |
 	SqlExpr | StringInterLiteral | StringLiteral | StructInit | Type | TypeOf | UnsafeExpr
+	
 
-pub type Stmt = AssertStmt | AssignStmt | Attr | Block | BranchStmt | CompFor | CompIf |
-	ConstDecl | DeferStmt | EnumDecl | ExprStmt | FnDecl | ForCStmt | ForInStmt | ForStmt |
-	GlobalDecl | GoStmt | GotoLabel | GotoStmt | HashStmt | Import | InterfaceDecl | Module |
-	Return | SqlStmt | StructDecl | TypeDecl | UnsafeStmt
+pub type Stmt = AssertStmt | AssignStmt | Block | BranchStmt | CompFor | CompIf | ConstDecl |
+	DeferStmt | EnumDecl | ExprStmt | FnDecl | ForCStmt | ForInStmt | ForStmt | GlobalDecl |
+	GoStmt | GotoLabel | GotoStmt | HashStmt | Import | InterfaceDecl | Module | Return |
+	SqlStmt | StructDecl | TypeDecl
 
 pub type ScopeObject = ConstField | GlobalDecl | Var
 
@@ -33,9 +34,11 @@ pub:
 	pos token.Position
 }
 
+// `{stmts}` or `unsafe {stmts}`
 pub struct Block {
 pub:
-	stmts []Stmt
+	stmts     []Stmt
+	is_unsafe bool
 }
 
 // | IncDecStmt k
@@ -127,7 +130,7 @@ pub:
 	comments         []Comment
 	default_expr     Expr
 	has_default_expr bool
-	attrs            []string
+	attrs            []table.Attr
 	is_public        bool
 pub mut:
 	typ              table.Type
@@ -172,7 +175,7 @@ pub:
 	pub_mut_pos  int // pub mut:
 	language     table.Language
 	is_union     bool
-	attrs        []string
+	attrs        []table.Attr
 	end_comments []Comment
 }
 
@@ -222,9 +225,9 @@ pub enum ImportSymbolKind {
 
 pub struct ImportSymbol {
 pub:
-	pos    token.Position
-	name   string
-	kind   ImportSymbolKind
+	pos  token.Position
+	name string
+	kind ImportSymbolKind
 }
 
 pub struct AnonFn {
@@ -251,11 +254,11 @@ pub:
 	language      table.Language
 	no_body       bool // just a definition `fn C.malloc()`
 	is_builtin    bool // this function is defined in builtin/strconv
-	ctdefine      string // has [if myflag] tag
 	pos           token.Position
 	body_pos      token.Position
 	file          string
 	is_generic    bool
+	attrs         []table.Attr
 pub mut:
 	stmts         []Stmt
 	return_type   table.Type
@@ -346,9 +349,9 @@ pub struct File {
 pub:
 	path         string
 	mod          Module
-	scope        &Scope
 	global_scope &Scope
 pub mut:
+	scope        &Scope
 	stmts        []Stmt
 	imports      []Import
 	errors       []errors.Error
@@ -360,6 +363,8 @@ pub mut:
 	typ table.Type
 }
 
+// TODO: (joe) remove completely, use ident.obj
+// instead which points to the scope object
 pub struct IdentVar {
 pub mut:
 	typ         table.Type
@@ -387,6 +392,7 @@ pub:
 	tok_kind token.Kind
 	pos      token.Position
 pub mut:
+	obj      ScopeObject
 	mod      string
 	name     string
 	kind     IdentKind
@@ -397,7 +403,7 @@ pub mut:
 pub fn (i &Ident) var_info() IdentVar {
 	match i.info as info {
 		IdentVar {
-			return info
+			return *info
 		}
 		else {
 			// return IdentVar{}
@@ -493,7 +499,7 @@ pub:
 	branches      []MatchBranch
 	pos           token.Position
 	is_mut        bool // `match mut ast_node {`
-	var_name      string
+	var_name      string // `match cond as var_name {`
 pub mut:
 	is_expr       bool // returns a value
 	return_type   table.Type
@@ -521,23 +527,44 @@ When .is_opt is true, the code should compile, even
 if `xyz` is NOT defined.
 If .is_opt is false, then when `xyz` is not defined,
 the compilation will fail.
+
+`$if method.type is string {}` will produce CompIf with:
+.is_typecheck true,
+.tchk_expr: method.type
+.tchk_type: string
+.tchk_match: true on each iteration, having a string `method.type`
 */
+pub enum CompIfKind {
+	platform
+	typecheck
+}
+
 pub struct CompIf {
 pub:
 	val        string
 	stmts      []Stmt
 	is_not     bool
+	kind       CompIfKind
+	tchk_expr  Expr
+	tchk_type  table.Type
 	pos        token.Position
 pub mut:
+	tchk_match bool
 	is_opt     bool
 	has_else   bool
 	else_stmts []Stmt
+}
+
+pub enum CompForKind {
+	methods
+	fields
 }
 
 pub struct CompFor {
 pub:
 	val_var string
 	stmts   []Stmt
+	kind    CompForKind
 pub mut:
 	// expr    Expr
 	typ     table.Type
@@ -586,12 +613,13 @@ pub:
 	mod string
 }
 
-// filter(), map()
+/*
+// filter(), map(), sort()
 pub struct Lambda {
 pub:
 	name string
 }
-
+*/
 pub struct AssignStmt {
 pub:
 	right         []Expr
@@ -614,22 +642,6 @@ pub:
 	pos       token.Position
 pub mut:
 	expr_type table.Type
-}
-
-// e.g. `[unsafe_fn]`
-pub struct Attr {
-pub:
-	name      string
-	is_string bool // `['xxx']`
-}
-
-pub fn (attrs []Attr) contains(attr Attr) bool {
-	for a in attrs {
-		if attr.name == a.name {
-			return true
-		}
-	}
-	return false
 }
 
 pub struct EnumVal {
@@ -696,11 +708,6 @@ pub mut:
 	ifdef string
 }
 
-pub struct UnsafeStmt {
-pub:
-	stmts []Stmt
-}
-
 // `(3+4)`
 pub struct ParExpr {
 pub:
@@ -726,13 +733,13 @@ pub struct ArrayInit {
 pub:
 	pos             token.Position
 	elem_type_pos   token.Position
-	exprs           []Expr
+	exprs           []Expr // `[expr, expr]` or `[expr]Type{}` for fixed array
 	is_fixed        bool
-	has_val         bool
+	has_val         bool // fixed size literal `[expr, expr]!!`
 	mod             string
 	len_expr        Expr
 	cap_expr        Expr
-	default_expr    Expr
+	default_expr    Expr // init: expr
 	has_len         bool
 	has_cap         bool
 	has_default     bool
@@ -742,6 +749,16 @@ pub mut:
 	interface_type  table.Type // Animal
 	elem_type       table.Type
 	typ             table.Type
+}
+
+pub struct ChanInit {
+pub:
+	pos        token.Position
+	cap_expr   Expr
+	has_cap    bool
+pub mut:
+	typ        table.Type
+	elem_type  table.Type
 }
 
 pub struct MapInit {
@@ -764,9 +781,17 @@ pub:
 	has_low  bool
 }
 
+// NB: &string(x) gets parsed as ast.PrefixExpr{ right: ast.CastExpr{...} }
+// TODO: that is very likely a parsing bug. It should get parsed as just
+// ast.CastExpr{...}, where .typname is '&string' instead.
+// The current situation leads to special cases in vfmt and cgen
+// (see prefix_expr_cast_expr in fmt.v, and .is_amp in cgen.v)
+// .in_prexpr is also needed because of that, because the checker needs to
+// show warnings about the deprecated C->V conversions `string(x)` and
+// `string(x,y)`, while skipping the real pointer casts like `&string(x)`.
 pub struct CastExpr {
 pub:
-	expr      Expr // `buf`
+	expr      Expr // `buf` in `string(buf, n)`
 	arg       Expr // `n` in `string(buf, n)`
 	typ       table.Type // `string` TODO rename to `type_to_cast_to`
 	pos       token.Position
@@ -774,6 +799,7 @@ pub mut:
 	typname   string
 	expr_type table.Type // `byteptr`
 	has_arg   bool
+	in_prexpr bool // is the parent node an ast.PrefixExpr
 }
 
 pub struct AssertStmt {
@@ -1080,8 +1106,6 @@ pub fn (stmt Stmt) position() token.Position {
 		StructDecl { return stmt.pos }
 		/*
 		// TypeDecl {
-		// }
-		// UnsafeStmt {
 		// }
 		*/
 		//
