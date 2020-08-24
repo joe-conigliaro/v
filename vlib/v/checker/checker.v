@@ -1658,8 +1658,17 @@ pub fn (mut c Checker) assign_stmt(mut assign_stmt ast.AssignStmt) {
 		left_first := assign_stmt.left[0]
 		if node.op == .amp && node.right is ast.Ident {
 			ident := node.right as ast.Ident
-			scope := c.file.scope.innermost(node.pos.pos)
-			if v := scope.find_var(ident.name) {
+			// scope := c.file.scope.innermost(node.pos.pos)
+			// if v := scope.find_var(ident.name) {
+			// 	if left_first is ast.Ident {
+			// 		assigned_var := left_first
+			// 		if !v.is_mut && assigned_var.is_mut && !c.inside_unsafe {
+			// 			c.error('`$ident.name` is immutable, cannot have a mutable reference to it',
+			// 				node.pos)
+			// 		}
+			// 	}
+			// }
+			if ident.obj is ast.Var as v {
 				if left_first is ast.Ident {
 					assigned_var := left_first
 					if !v.is_mut && assigned_var.is_mut && !c.inside_unsafe {
@@ -3166,7 +3175,8 @@ pub fn (mut c Checker) index_expr(mut node ast.IndexExpr) table.Type {
 		if node.left is ast.Ident {
 			ident := node.left as ast.Ident
 			// scope := c.file.scope.innermost(ident.pos.pos)
-			if v := ident.scope.find_var(ident.name) {
+			if ident.obj is ast.Var as v {
+			// if v := ident.scope.find_var(ident.name) {
 				// `mut param []T` function parameter
 				is_ok = v.is_mut && v.is_arg && !typ.deref().is_ptr()
 			}
