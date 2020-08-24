@@ -204,6 +204,7 @@ pub fn (mut p Parser) expr(precedence int) ast.Expr {
 					left: node
 					args: args
 					pos: pos
+					scope: p.scope
 				}
 			}
 			return node

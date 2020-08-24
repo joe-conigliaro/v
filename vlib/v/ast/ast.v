@@ -288,6 +288,7 @@ pub mut:
 	return_type        table.Type
 	should_be_skipped  bool
 	generic_type       table.Type // TODO array, to support multiple types
+	scope              &Scope
 }
 
 pub struct CallArg {
@@ -393,6 +394,7 @@ pub:
 	tok_kind token.Kind
 	pos      token.Position
 pub mut:
+	scope    &Scope
 	obj      ScopeObject
 	mod      string
 	name     string
@@ -478,6 +480,7 @@ pub:
 	mut_name     bool // `if mut name is`
 pub mut:
 	smartcast    bool // true when cond is `x is SumType`, set in checker.if_expr
+	scope        &Scope
 }
 
 pub struct UnsafeExpr {
@@ -593,6 +596,7 @@ pub:
 	stmts     []Stmt
 	pos       token.Position
 pub mut:
+	scope     &Scope
 	key_type  table.Type
 	val_type  table.Type
 	cond_type table.Type

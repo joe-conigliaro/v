@@ -12,6 +12,7 @@ fn (mut p Parser) lock_expr() ast.LockExpr {
 	mut lockeds := []ast.Ident{}
 	for p.tok.kind == .name {
 		lockeds << ast.Ident{
+			scope: p.scope
 			language: table.Language.v
 			// kind is set in checker once ident is processed
 			// kind: .variable

@@ -868,7 +868,8 @@ pub fn (mut c Checker) call_method(mut call_expr ast.CallExpr) table.Type {
 		is_sort := method_name == 'sort'
 		if is_filter_map || is_sort {
 			array_info := left_type_sym.info as table.Array
-			mut scope := c.file.scope.innermost(call_expr.pos.pos)
+			// mut scope := c.file.scope.innermost(call_expr.pos.pos)
+			mut scope := call_expr.scope
 			if is_filter_map {
 				scope.update_var_type('it', array_info.elem_type)
 			} else if is_sort {
@@ -1151,7 +1152,8 @@ pub fn (mut c Checker) call_fn(mut call_expr ast.CallExpr) table.Type {
 	}
 	// check for arg (var) of fn type
 	if !found {
-		scope := c.file.scope.innermost(call_expr.pos.pos)
+		// scope := c.file.scope.innermost(call_expr.pos.pos)
+		scope := call_expr.scope
 		if v := scope.find_var(fn_name) {
 			if v.typ != 0 {
 				vts := c.table.get_type_symbol(v.typ)
@@ -1169,7 +1171,8 @@ pub fn (mut c Checker) call_fn(mut call_expr ast.CallExpr) table.Type {
 		return table.void_type
 	}
 	if !found_in_args {
-		scope := c.file.scope.innermost(call_expr.pos.pos)
+		// scope := c.file.scope.innermost(call_expr.pos.pos)
+		scope := call_expr.scope
 		if _ := scope.find_var(fn_name) {
 			c.error('ambiguous call to: `$fn_name`, may refer to fn `$fn_name` or variable `$fn_name`',
 				call_expr.pos)
@@ -2103,7 +2106,7 @@ fn (mut c Checker) stmt(node ast.Stmt) {
 					c.error('range type can not be string', node.cond.position())
 				}
 			} else {
-				mut scope := c.file.scope.innermost(node.pos.pos)
+				// mut scope := c.file.scope.innermost(node.pos.pos)
 				sym := c.table.get_type_symbol(typ)
 				if sym.kind == .map && !(node.key_var.len > 0 && node.val_var.len > 0) {
 					c.error('declare a key and a value variable when ranging a map: `for key, val in map {`\n' +
@@ -2115,7 +2118,7 @@ fn (mut c Checker) stmt(node ast.Stmt) {
 						else { table.int_type }
 					}
 					node.key_type = key_type
-					scope.update_var_type(node.key_var, key_type)
+					node.scope.update_var_type(node.key_var, key_type)
 				}
 				value_type := c.table.value_type(typ)
 				if value_type == table.void_type || typ.has_flag(.optional) {
@@ -2127,7 +2130,7 @@ fn (mut c Checker) stmt(node ast.Stmt) {
 				node.cond_type = typ
 				node.kind = sym.kind
 				node.val_type = value_type
-				scope.update_var_type(node.val_var, value_type)
+				node.scope.update_var_type(node.val_var, value_type)
 			}
 			c.stmts(node.stmts)
 			c.in_for_count--
@@ -2561,8 +2564,9 @@ pub fn (mut c Checker) ident(mut ident ast.Ident) table.Type {
 		return info.typ
 	} else if ident.kind == .unresolved {
 		// first use
-		start_scope := c.file.scope.innermost(ident.pos.pos)
-		if obj1 := start_scope.find(ident.name) {
+		// start_scope := c.file.scope.innermost(ident.pos.pos)
+		// if obj1 := start_scope.find(ident.name) {
+		if obj1 := ident.scope.find(ident.name) {
 			match mut obj1 as obj {
 				ast.GlobalDecl {
 					ident.kind = .global
@@ -2996,7 +3000,8 @@ pub fn (mut c Checker) if_expr(mut node ast.IfExpr) table.Type {
 					left_sym := c.table.get_type_symbol(infix.left_type)
 					if left_sym.kind in [.sum_type, .interface_] && branch.left_as_name.len > 0 {
 						mut is_mut := false
-						mut scope := c.file.scope.innermost(branch.body_pos.pos)
+						// mut scope := c.file.scope.innermost(branch.body_pos.pos)
+						mut scope := branch.scope
 						if infix.left is ast.Ident as infix_left {
 							if var := scope.find_var(infix_left.name) {
 								is_mut = var.is_mut
@@ -3160,8 +3165,8 @@ pub fn (mut c Checker) index_expr(mut node ast.IndexExpr) table.Type {
 		mut is_ok := false
 		if node.left is ast.Ident {
 			ident := node.left as ast.Ident
-			scope := c.file.scope.innermost(ident.pos.pos)
-			if v := scope.find_var(ident.name) {
+			// scope := c.file.scope.innermost(ident.pos.pos)
+			if v := ident.scope.find_var(ident.name) {
 				// `mut param []T` function parameter
 				is_ok = v.is_mut && v.is_arg && !typ.deref().is_ptr()
 			}

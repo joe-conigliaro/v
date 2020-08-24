@@ -895,6 +895,7 @@ pub fn (mut p Parser) parse_ident(language table.Language) ast.Ident {
 		mut name := p.check_name()
 		if name == '_' {
 			return ast.Ident{
+				scope: 0
 				tok_kind: p.tok.kind
 				name: '_'
 				kind: .blank_ident
@@ -912,6 +913,7 @@ pub fn (mut p Parser) parse_ident(language table.Language) ast.Ident {
 			name = '${p.expr_mod}.$name'
 		}
 		return ast.Ident{
+			scope: p.scope
 			tok_kind: p.tok.kind
 			kind: .unresolved
 			name: name
@@ -1263,6 +1265,7 @@ fn (mut p Parser) dot_expr(left ast.Expr) ast.Expr {
 			args: args
 			pos: pos
 			is_method: true
+			scope: p.scope
 			or_block: ast.OrExpr{
 				stmts: or_stmts
 				kind: or_kind

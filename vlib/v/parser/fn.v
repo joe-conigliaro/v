@@ -94,6 +94,7 @@ pub fn (mut p Parser) call_expr(language table.Language, mod string) ast.CallExp
 		mod: fn_mod
 		pos: pos
 		language: language
+		scope: p.scope
 		or_block: ast.OrExpr{
 			stmts: or_stmts
 			kind: or_kind

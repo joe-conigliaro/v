@@ -115,10 +115,14 @@ fn (mut p Parser) if_expr() ast.IfExpr {
 		end_pos := p.prev_tok.position()
 		body_pos := p.tok.position()
 		p.inside_if = false
-		stmts := p.parse_block()
-		if is_guard {
-			p.close_scope()
+		if !is_guard {
+			p.open_scope()
 		}
+		// stmts := p.parse_block()
+		stmts := p.parse_block_no_scope(false)
+		// if is_guard {
+		// 	p.close_scope()
+		// }
 		branches << ast.IfBranch{
 			cond: cond
 			stmts: stmts
@@ -127,7 +131,9 @@ fn (mut p Parser) if_expr() ast.IfExpr {
 			comments: comments
 			left_as_name: left_as_name
 			mut_name: mut_name
+			scope: p.scope
 		}
+		p.close_scope()
 		comments = p.eat_comments()
 		if p.tok.kind != .key_else {
 			break

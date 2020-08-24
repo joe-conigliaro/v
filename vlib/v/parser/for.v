@@ -123,8 +123,8 @@ fn (mut p Parser) for_stmt() ast.Stmt {
 		p.inside_for = false
 		stmts := p.parse_block()
 		// println('nr stmts=$stmts.len')
-		p.close_scope()
-		return ast.ForInStmt{
+		
+		for_in_stmt := ast.ForInStmt{
 			stmts: stmts
 			cond: cond
 			key_var: key_var_name
@@ -132,7 +132,10 @@ fn (mut p Parser) for_stmt() ast.Stmt {
 			high: high_expr
 			is_range: is_range
 			pos: pos
+			scope: p.scope
 		}
+		p.close_scope()
+		return for_in_stmt
 	}
 	// `for cond {`
 	cond := p.expr(0)
