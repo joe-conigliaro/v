@@ -1885,7 +1885,9 @@ fn (mut p Parser) assoc() ast.Assoc {
 	pos := p.tok.position()
 	mut v := p.scope.find_var(var_name) or {
 		p.error('unknown variable `$var_name`')
-		return ast.Assoc{scope: 0}
+		return ast.Assoc{
+			scope: 0
+		}
 	}
 	v.is_used = true
 	// println('assoc var $name typ=$var.typ')
