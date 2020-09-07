@@ -438,7 +438,6 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 			}
 		}
 	}
-	println('SEND CONTROL FRAME $code, $control_frame.len from server? ($ws.is_server)')
 	ws.socket_write(control_frame) or {
 		return error('send_control_frame: error sending $frame_typ control frame.')
 	}
@@ -447,9 +446,7 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 // parse_uri, parses the url string to it's components
 // todo: support not using port to default ones
 fn parse_uri(url string) ?&Uri {
-	u := urllib.parse(url) or {
-		return error(err)
-	}
+	u := urllib.parse(url)?
 	v := u.request_uri().split('?')
 	querystring := if v.len > 1 { '?' + v[1] } else { '' }
 	return &Uri{

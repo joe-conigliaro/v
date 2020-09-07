@@ -48,7 +48,7 @@ you can do in V.
 
 </td><td width=33% valign=top>
 
-* [println](#println)
+* [println and other builtin functions](#println-and-other-builtin-functions)
 * [Functions 2](#functions-2)
     * [Pure functions by default](#pure-functions-by-default)
     * [Mutable arguments](#mutable-arguments)
@@ -254,7 +254,7 @@ Try compiling the program above after removing `mut` from the first line.
 
 ### Initialization vs assignment
 
-Note the (important) difference between `:=` and `=`
+Note the (important) difference between `:=` and `=`.
 `:=` is used for declaring and initializing, `=` is used for assigning.
 
 ```v
@@ -891,8 +891,7 @@ enum Color {
 
 fn is_red_or_blue(c Color) bool {
     return match c {
-        .red   { true  }
-        .blue  { true  }
+        .red, .blue  { true } // comma can be used to test multiple values
         .green { false }
     }
 }
@@ -1324,7 +1323,7 @@ vs
 println('Top cities: $top_cities.filter(.usa)')
 ```
 
-## println
+## println and other builtin functions
 
 `println` is a simple yet powerful builtin function. It can print anything:
 strings, numbers, arrays, maps, structs.
@@ -1353,6 +1352,15 @@ println(red)
 ```
 
 If you don't want to print a newline, use `print()` instead.
+
+The number of builtin functions is low. Other builtin functions are:
+
+
+```
+fn exit(exit_code int)
+fn panic(message string)
+fn print_backtrace()
+```
 
 ## Modules
 
@@ -1626,7 +1634,7 @@ propagate the error:
 import net.http
 
 fn f(url string) ?string {
-    resp := http.get(url)?
+    resp := http.get(url) ?
     return resp.text
 }
 ```
@@ -1970,7 +1978,7 @@ For more examples, see <a href='https://github.com/vlang/v/blob/master/vlib/orm/
 ## Writing Documentation
 
 The way it works is very similar to Go. It's very simple: there's no need to
-write documentation seperately for your code, vdoc will generate it from docstrings in the source code.
+write documentation separately for your code, vdoc will generate it from docstrings in the source code.
 
 Documentation for each function/type/const must be placed right before the declaration:
 

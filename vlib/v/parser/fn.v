@@ -30,7 +30,7 @@ pub fn (mut p Parser) call_expr(language table.Language, mod string) ast.CallExp
 		// `foo<int>(10)`
 		p.next() // `<`
 		p.expr_mod = ''
-		mut generic_type = p.parse_type()
+		generic_type = p.parse_type()
 		p.check(.gt) // `>`
 		// In case of `foo<T>()`
 		// T is unwrapped and registered in the checker.
@@ -40,7 +40,7 @@ pub fn (mut p Parser) call_expr(language table.Language, mod string) ast.CallExp
 		}
 	}
 	p.check(.lpar)
-	args := p.call_args()
+	mut args := p.call_args()
 	last_pos := p.tok.position()
 	p.check(.rpar)
 	// ! in mutable methods

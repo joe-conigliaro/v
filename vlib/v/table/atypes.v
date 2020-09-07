@@ -15,8 +15,8 @@ import strings
 
 pub type Type int
 
-pub type TypeInfo = Alias | Array | ArrayFixed | Chan | Enum | FnType | GenericStructInst | Interface |
-	Map | MultiReturn | Struct | SumType
+pub type TypeInfo = Alias | Array | ArrayFixed | Chan | Enum | FnType | GenericStructInst |
+	Interface | Map | MultiReturn | Struct | SumType
 
 pub enum Language {
 	v
@@ -255,20 +255,23 @@ pub const (
 	array_type_idx   = 20
 	map_type_idx     = 21
 	chan_type_idx    = 22
-	any_type_idx     = 23
-	// t_type_idx       = 23
-	any_flt_type_idx = 24
-	any_int_type_idx = 25
+	sizet_type_idx   = 23
+	rune_type_idx    = 24
+	any_type_idx     = 25
+	any_flt_type_idx = 26
+	any_int_type_idx = 27
 )
 
 pub const (
 	integer_type_idxs          = [i8_type_idx, i16_type_idx, int_type_idx, i64_type_idx, byte_type_idx,
-		u16_type_idx, u32_type_idx, u64_type_idx, any_int_type_idx]
+		u16_type_idx, u32_type_idx, u64_type_idx, any_int_type_idx, rune_type_idx]
 	signed_integer_type_idxs   = [i8_type_idx, i16_type_idx, int_type_idx, i64_type_idx]
 	unsigned_integer_type_idxs = [byte_type_idx, u16_type_idx, u32_type_idx, u64_type_idx]
 	float_type_idxs            = [f32_type_idx, f64_type_idx, any_flt_type_idx]
 	number_type_idxs           = [i8_type_idx, i16_type_idx, int_type_idx, i64_type_idx, byte_type_idx,
-		u16_type_idx, u32_type_idx, u64_type_idx, f32_type_idx, f64_type_idx, any_int_type_idx, any_flt_type_idx]
+		u16_type_idx, u32_type_idx, u64_type_idx, f32_type_idx, f64_type_idx, any_int_type_idx, any_flt_type_idx,
+		rune_type_idx,
+	]
 	pointer_type_idxs          = [voidptr_type_idx, byteptr_type_idx, charptr_type_idx]
 	string_type_idxs           = [string_type_idx, ustring_type_idx]
 )
@@ -296,8 +299,8 @@ pub const (
 	array_type   = new_type(array_type_idx)
 	map_type     = new_type(map_type_idx)
 	chan_type    = new_type(chan_type_idx)
+	rune_type    = new_type(rune_type_idx)
 	any_type     = new_type(any_type_idx)
-	// t_type       = new_type(t_type_idx)
 	any_flt_type = new_type(any_flt_type_idx)
 	any_int_type = new_type(any_int_type_idx)
 )
@@ -305,7 +308,7 @@ pub const (
 pub const (
 	builtin_type_names = ['void', 'voidptr', 'charptr', 'byteptr', 'i8', 'i16', 'int', 'i64', 'u16',
 		'u32', 'u64', 'any_int', 'f32', 'f64', 'any_float', 'string', 'ustring', 'char', 'byte', 'bool',
-		'none', 'array', 'array_fixed', 'map', 'chan', 'any', 'struct', 'mapnode', 'size_t']
+		'none', 'array', 'array_fixed', 'map', 'chan', 'any', 'struct', 'mapnode', 'size_t', 'rune']
 )
 
 pub struct MultiReturn {
@@ -338,6 +341,7 @@ pub enum Kind {
 	f64
 	char
 	size_t
+	rune
 	bool
 	none_
 	string
@@ -564,17 +568,23 @@ pub fn (mut t Table) register_builtin_type_symbols() {
 		mod: 'builtin'
 	})
 	t.register_type_symbol({
+		kind: .size_t
+		name: 'size_t'
+		source_name: 'size_t'
+		mod: 'builtin'
+	})
+	t.register_type_symbol({
+		kind: .rune
+		name: 'rune'
+		source_name: 'rune'
+		mod: 'builtin'
+	})
+	t.register_type_symbol({
 		kind: .any
 		name: 'any'
 		source_name: 'any'
 		mod: 'builtin'
 	})
-	// t.register_type_symbol({
-	// kind: .any
-	// name: 'T'
-	// mod: 'builtin'
-	// is_public: true
-	// })
 	t.register_type_symbol({
 		kind: .any_float
 		name: 'any_float'
@@ -585,12 +595,6 @@ pub fn (mut t Table) register_builtin_type_symbols() {
 		kind: .any_int
 		name: 'any_int'
 		source_name: 'any_int'
-		mod: 'builtin'
-	})
-	t.register_type_symbol({
-		kind: .size_t
-		name: 'size_t'
-		source_name: 'size_t'
 		mod: 'builtin'
 	})
 	// TODO: remove. for v1 map compatibility
@@ -671,6 +675,7 @@ pub fn (k Kind) str() string {
 		.interface_ { 'interface' }
 		.ustring { 'ustring' }
 		.generic_struct_inst { 'generic_struct_inst' }
+		.rune { 'rune' }
 	}
 	return k_str
 }
@@ -756,7 +761,8 @@ pub mut:
 
 pub struct Chan {
 pub mut:
-	elem_type   Type
+	elem_type Type
+	is_mut    bool
 }
 
 pub struct Map {
@@ -797,6 +803,9 @@ pub fn (table &Table) type_to_str(t Type) string {
 		res = res.replace('map_string_', 'map[string]')
 		map_start = 'map[string]'
 	}
+	if sym.kind == .chan || 'chan_' in res {
+		res = res.replace('chan_', '')
+	}
 	// mod.submod.submod2.Type => submod2.Type
 	if res.contains('.') {
 		vals := res.split('.')
@@ -813,6 +822,9 @@ pub fn (table &Table) type_to_str(t Type) string {
 		if sym.kind == .map && !res.starts_with('map') {
 			res = map_start + res
 		}
+		if sym.kind == .chan && !res.starts_with('chan') {
+			res = 'chan ' + res
+		}
 	}
 	nr_muls := t.nr_muls()
 	if nr_muls > 0 {
@@ -825,11 +837,6 @@ pub fn (table &Table) type_to_str(t Type) string {
 			res = '?' + res
 		}
 	}
-	/*
-	if res.starts_with(cur_mod +'.') {
-	res = res[cur_mod.len+1.. ]
-	}
-	*/
 	return res
 }
 

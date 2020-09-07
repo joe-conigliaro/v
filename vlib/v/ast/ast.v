@@ -10,11 +10,11 @@ import v.errors
 pub type TypeDecl = AliasTypeDecl | FnTypeDecl | SumTypeDecl
 
 pub type Expr = AnonFn | ArrayInit | AsCast | Assoc | BoolLiteral | CallExpr | CastExpr |
-	CharLiteral | ChanInit | Comment | ComptimeCall | ConcatExpr | EnumVal | FloatLiteral | Ident | IfExpr |
-	IfGuardExpr | IndexExpr | InfixExpr | IntegerLiteral | Likely | LockExpr | MapInit | MatchExpr |
-	None | OrExpr | ParExpr | PostfixExpr | PrefixExpr | RangeExpr | SelectorExpr | SizeOf |
-	SqlExpr | StringInterLiteral | StringLiteral | StructInit | Type | TypeOf | UnsafeExpr
-	
+	ChanInit | CharLiteral | Comment | ComptimeCall | ConcatExpr | EnumVal | FloatLiteral |
+	Ident | IfExpr | IfGuardExpr | IndexExpr | InfixExpr | IntegerLiteral | Likely | LockExpr |
+	MapInit | MatchExpr | None | OrExpr | ParExpr | PostfixExpr | PrefixExpr | RangeExpr |
+	SelectorExpr | SizeOf | SqlExpr | StringInterLiteral | StringLiteral | StructInit | Type |
+	TypeOf | UnsafeExpr
 
 pub type Stmt = AssertStmt | AssignStmt | Block | BranchStmt | CompFor | CompIf | ConstDecl |
 	DeferStmt | EnumDecl | ExprStmt | FnDecl | ForCStmt | ForInStmt | ForStmt | GlobalDecl |
@@ -106,7 +106,7 @@ pub:
 pub struct SelectorExpr {
 pub:
 	pos        token.Position
-	expr       Expr
+	expr       Expr // expr.field_name
 	field_name string
 pub mut:
 	expr_type  table.Type // type of `Foo` in `Foo.bar`
@@ -158,10 +158,11 @@ pub mut:
 
 pub struct ConstDecl {
 pub:
-	is_pub bool
-	pos    token.Position
+	is_pub       bool
+	pos          token.Position
 pub mut:
-	fields []ConstField
+	fields       []ConstField
+	end_comments []Comment
 }
 
 pub struct StructDecl {
@@ -289,16 +290,26 @@ pub mut:
 	should_be_skipped  bool
 	generic_type       table.Type // TODO array, to support multiple types
 	scope              &Scope
+	// autofree_vars      []AutofreeArgVar
+	// autofree_vars_ids  []int
 }
 
+/*
+pub struct AutofreeArgVar {
+	name string
+	idx  int
+}
+*/
 pub struct CallArg {
 pub:
-	is_mut   bool
-	share    table.ShareType
-	expr     Expr
-	comments []Comment
+	is_mut          bool
+	share           table.ShareType
+	expr            Expr
+	comments        []Comment
 pub mut:
-	typ      table.Type
+	typ             table.Type
+	is_tmp_autofree bool
+	// tmp_name        string // for autofree
 }
 
 pub struct Return {
@@ -618,8 +629,10 @@ pub:
 // #include etc
 pub struct HashStmt {
 pub:
-	val string
 	mod string
+	pos token.Position
+pub mut:
+	val string
 }
 
 /*
@@ -762,12 +775,12 @@ pub mut:
 
 pub struct ChanInit {
 pub:
-	pos        token.Position
-	cap_expr   Expr
-	has_cap    bool
+	pos       token.Position
+	cap_expr  Expr
+	has_cap   bool
 pub mut:
-	typ        table.Type
-	elem_type  table.Type
+	typ       table.Type
+	elem_type table.Type
 }
 
 pub struct MapInit {
@@ -1070,9 +1083,9 @@ pub fn (expr Expr) position() token.Position {
 
 pub fn (expr Expr) is_lvalue() bool {
 	match expr {
-		Ident {return true}
-		IndexExpr {return expr.left.is_lvalue()}
-		SelectorExpr {return expr.expr.is_lvalue()}
+		Ident { return true }
+		IndexExpr { return expr.left.is_lvalue() }
+		SelectorExpr { return expr.expr.is_lvalue() }
 		else {}
 	}
 	return false

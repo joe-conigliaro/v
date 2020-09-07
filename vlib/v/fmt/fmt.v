@@ -677,8 +677,13 @@ pub fn (mut f Fmt) struct_decl(node ast.StructDecl) {
 		}
 		f.write('\n')
 	}
+	f.comments_after_last_field(node.end_comments)
+	f.writeln('}\n')
+}
+
+pub fn (mut f Fmt) comments_after_last_field(comments []ast.Comment) {
 	// Handle comments after last field
-	for comment in node.end_comments {
+	for comment in comments {
 		f.indent++
 		f.empty_line = true
 		f.comment(comment, {
@@ -687,7 +692,6 @@ pub fn (mut f Fmt) struct_decl(node ast.StructDecl) {
 		f.writeln('')
 		f.indent--
 	}
-	f.writeln('}\n')
 }
 
 pub fn (mut f Fmt) interface_decl(node ast.InterfaceDecl) {
@@ -721,12 +725,20 @@ pub fn (mut f Fmt) prefix_expr_cast_expr(fexpr ast.Expr) {
 
 pub fn (f &Fmt) type_to_str(t table.Type) string {
 	mut res := f.table.type_to_str(t)
-	map_prefix := 'map[string]'
 	cur_mod := f.cur_mod + '.'
+	//
+	map_prefix := 'map[string]'
 	has_map_prefix := res.starts_with(map_prefix)
 	if has_map_prefix {
 		res = res.replace(map_prefix, '')
 	}
+	//
+	chan_prefix := 'chan '
+	has_chan_prefix := res.starts_with(chan_prefix)
+	if has_chan_prefix {
+		res = res.replace(chan_prefix, '')
+	}
+	//
 	no_symbols := res.trim_left('&[]')
 	should_shorten := no_symbols.starts_with(cur_mod)
 	//
@@ -747,6 +759,9 @@ pub fn (f &Fmt) type_to_str(t table.Type) string {
 	}
 	if should_shorten {
 		res = res.replace_once(cur_mod, '')
+	}
+	if has_chan_prefix {
+		res = chan_prefix + res
 	}
 	if has_map_prefix {
 		res = map_prefix + res
@@ -800,14 +815,7 @@ pub fn (mut f Fmt) expr(node ast.Expr) {
 			f.call_expr(node)
 		}
 		ast.ChanInit {
-			f.write('chan[')
-			f.write(f.type_to_str(node.elem_type))
-			f.write(']{')
-			if node.has_cap {
-				f.write('cap: ')
-				f.expr(node.cap_expr)
-			}
-			f.write('}')
+			f.chan_init(mut node)
 		}
 		ast.CharLiteral {
 			f.write('`$node.val`')
@@ -1128,7 +1136,7 @@ pub fn (mut f Fmt) or_expr(or_block ast.OrExpr) {
 			}
 		}
 		.propagate {
-			f.write('?')
+			f.write(' ?')
 		}
 	}
 }
@@ -1619,6 +1627,21 @@ fn expr_is_single_line(expr ast.Expr) bool {
 	return true
 }
 
+pub fn (mut f Fmt) chan_init(mut it ast.ChanInit) {
+	if it.elem_type == 0 && it.typ > 0 {
+		info := f.table.get_type_symbol(it.typ).chan_info()
+		it.elem_type = info.elem_type
+	}
+	f.write('chan ')
+	f.write(f.type_to_str(it.elem_type))
+	f.write('{')
+	if it.has_cap {
+		f.write('cap: ')
+		f.expr(it.cap_expr)
+	}
+	f.write('}')
+}
+
 pub fn (mut f Fmt) array_init(it ast.ArrayInit) {
 	if it.exprs.len == 0 && it.typ != 0 && it.typ != table.void_type {
 		// `x := []string`
@@ -1814,6 +1837,7 @@ pub fn (mut f Fmt) const_decl(it ast.ConstDecl) {
 		f.expr(field.expr)
 		f.writeln('')
 	}
+	f.comments_after_last_field(it.end_comments)
 	f.indent--
 	f.writeln(')\n')
 }

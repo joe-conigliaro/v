@@ -52,9 +52,15 @@ pub fn (mut p Parser) parse_map_type() table.Type {
 }
 
 pub fn (mut p Parser) parse_chan_type() table.Type {
+	if p.peek_tok.kind != .name && p.peek_tok.kind != .key_mut && p.peek_tok.kind != .amp {
+		p.next()
+		return table.chan_type
+	}
+	p.register_auto_import('sync')
 	p.next()
+	is_mut := p.tok.kind == .key_mut
 	elem_type := p.parse_type()
-	idx := p.table.find_or_register_chan(elem_type)
+	idx := p.table.find_or_register_chan(elem_type, is_mut)
 	return table.new_type(idx)
 }
 
