@@ -1727,7 +1727,9 @@ pub fn (mut c Checker) assign_stmt(mut assign_stmt ast.AssignStmt) {
 		if left_first is ast.Ident {
 			assigned_var := left_first
 			if node.right is ast.Ident as ident {
-				c.ident(ident)
+				// scope := c.file.scope.innermost(node.pos.pos)
+				// if v := scope.find_var(ident.name) {
+				c.ident(ident) // .obj set in `ident()`
 				if ident.obj is ast.Var as v {
 					right_type0 = v.typ
 					if node.op == .amp {
@@ -1738,19 +1740,6 @@ pub fn (mut c Checker) assign_stmt(mut assign_stmt ast.AssignStmt) {
 					}
 				}
 			}
-			// if node.right is ast.Ident {
-			// 	ident := node.right as ast.Ident
-			// 	scope := c.file.scope.innermost(node.pos.pos)
-			// 	if v := scope.find_var(ident.name) {
-			// 		right_type0 = v.typ
-			// 		if node.op == .amp {
-			// 			if !v.is_mut && assigned_var.is_mut && !c.inside_unsafe {
-			// 				c.error('`$ident.name` is immutable, cannot have a mutable reference to it',
-			// 					node.pos)
-			// 			}
-			// 		}
-			// 	}
-			// }
 			if node.op == .arrow {
 				if assigned_var.is_mut {
 					right_sym := c.table.get_type_symbol(right_type0)

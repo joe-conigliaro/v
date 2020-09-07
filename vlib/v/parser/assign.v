@@ -124,7 +124,7 @@ fn (mut p Parser) partial_assign_stmt(left []ast.Expr, left_comments []ast.Comme
 						pos: lx.pos
 					}
 					obj := ast.ScopeObject(v)
-					lx.obj = obj
+					lx.obj = obj // TODO: either fully set or nothing. see `checker.ident()`
 					p.scope.register(lx.name, obj)
 				}
 			}
