@@ -861,6 +861,7 @@ pub:
 	pos      token.Position
 pub mut:
 	typ      table.Type
+	scope    &Scope
 }
 
 pub struct SizeOf {

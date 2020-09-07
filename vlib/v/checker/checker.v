@@ -930,7 +930,6 @@ pub fn (mut c Checker) call_method(mut call_expr ast.CallExpr) table.Type {
 		is_sort := method_name == 'sort'
 		if is_filter_map || is_sort {
 			array_info := left_type_sym.info as table.Array
-			// mut scope := c.file.scope.innermost(call_expr.pos.pos)
 			mut scope := call_expr.scope
 			if is_filter_map {
 				scope.update_var_type('it', array_info.elem_type)
@@ -1214,7 +1213,6 @@ pub fn (mut c Checker) call_fn(mut call_expr ast.CallExpr) table.Type {
 	}
 	// check for arg (var) of fn type
 	if !found {
-		// scope := c.file.scope.innermost(call_expr.pos.pos)
 		scope := call_expr.scope
 		if v := scope.find_var(fn_name) {
 			if v.typ != 0 {
@@ -1233,7 +1231,6 @@ pub fn (mut c Checker) call_fn(mut call_expr ast.CallExpr) table.Type {
 		return table.void_type
 	}
 	if !found_in_args {
-		// scope := c.file.scope.innermost(call_expr.pos.pos)
 		scope := call_expr.scope
 		if _ := scope.find_var(fn_name) {
 			c.error('ambiguous call to: `$fn_name`, may refer to fn `$fn_name` or variable `$fn_name`',
@@ -1729,11 +1726,10 @@ pub fn (mut c Checker) assign_stmt(mut assign_stmt ast.AssignStmt) {
 		left_first := assign_stmt.left[0]
 		if left_first is ast.Ident {
 			assigned_var := left_first
-			if node.right is ast.Ident {
-				ident := node.right as ast.Ident
+			if node.right is ast.Ident as ident {
 				if ident.obj is ast.Var as v {
-					if left_first is ast.Ident {
-						assigned_var := left_first
+					right_type0 = v.typ
+					if node.op == .amp {
 						if !v.is_mut && assigned_var.is_mut && !c.inside_unsafe {
 							c.error('`$ident.name` is immutable, cannot have a mutable reference to it',
 								node.pos)
@@ -2191,7 +2187,6 @@ fn (mut c Checker) stmt(node ast.Stmt) {
 					c.error('range type can not be string', node.cond.position())
 				}
 			} else {
-				// mut scope := c.file.scope.innermost(node.pos.pos)
 				sym := c.table.get_type_symbol(typ)
 				if sym.kind == .map && !(node.key_var.len > 0 && node.val_var.len > 0) {
 					c.error('declare a key and a value variable when ranging a map: `for key, val in map {`\n' +
@@ -2421,8 +2416,7 @@ pub fn (mut c Checker) expr(node ast.Expr) table.Type {
 			// return node.typ
 		}
 		ast.Assoc {
-			scope := c.file.scope.innermost(node.pos.pos)
-			v := scope.find_var(node.var_name) or {
+			v := node.scope.find_var(node.var_name) or {
 				panic(err)
 			}
 			for i, _ in node.fields {
@@ -3140,7 +3134,6 @@ pub fn (mut c Checker) if_expr(mut node ast.IfExpr) table.Type {
 					left_sym := c.table.get_type_symbol(infix.left_type)
 					if left_sym.kind in [.sum_type, .interface_] && branch.left_as_name.len > 0 {
 						mut is_mut := false
-						// mut scope := c.file.scope.innermost(branch.body_pos.pos)
 						mut scope := branch.scope
 						if infix.left is ast.Ident as infix_left {
 							if var := scope.find_var(infix_left.name) {
@@ -3307,7 +3300,6 @@ pub fn (mut c Checker) index_expr(mut node ast.IndexExpr) table.Type {
 		mut is_ok := false
 		if node.left is ast.Ident {
 			ident := node.left as ast.Ident
-			// scope := c.file.scope.innermost(ident.pos.pos)
 			if ident.obj is ast.Var as v {
 			// if v := ident.scope.find_var(ident.name) {
 				// `mut param []T` function parameter

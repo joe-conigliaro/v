@@ -52,6 +52,7 @@ fn (mut p Parser) if_expr() ast.IfExpr {
 					pos: start_pos.extend(end_pos)
 					body_pos: body_pos.extend(p.tok.position())
 					comments: comments
+					scope: p.scope
 				}
 				if prev_guard {
 					p.close_scope()
