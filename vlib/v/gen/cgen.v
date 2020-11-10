@@ -754,7 +754,8 @@ fn (mut g Gen) stmts_with_tmp_var(stmts []ast.Stmt, tmp_var string) {
 			// g.writeln('// autofree_scope_vars($stmt.position().pos) | ${typeof(stmt)}')
 			// go back 1 position is important so we dont get the
 			// internal scope of for loops and possibly other nodes
-			g.autofree_scope_vars(stmt.position().pos - 1)
+			stmt_pos := stmt.position()
+			g.autofree_scope_vars(stmt_pos.pos - 1, stmt_pos.line_nr)
 		}
 	}
 }
@@ -1924,7 +1925,7 @@ fn (mut g Gen) gen_clone_assignment(val ast.Expr, right_sym table.TypeSymbol, ad
 	return true
 }
 
-fn (mut g Gen) autofree_scope_vars(pos int) {
+fn (mut g Gen) autofree_scope_vars(pos int, line_nr int) {
 	if g.is_builtin_mod {
 		// In `builtin` everything is freed manually.
 		return
@@ -1932,10 +1933,10 @@ fn (mut g Gen) autofree_scope_vars(pos int) {
 	// eprintln('> free_scope_vars($pos)')
 	scope := g.file.scope.innermost(pos)
 	g.writeln('// autofree_scope_vars(pos=$pos scope.pos=$scope.start_pos scope.end_pos=$scope.end_pos)')
-	g.autofree_scope_vars2(scope, scope.end_pos)
+	g.autofree_scope_vars2(scope, scope.start_pos, scope.end_pos, line_nr)
 }
 
-fn (mut g Gen) autofree_scope_vars2(scope &ast.Scope, end_pos int) {
+fn (mut g Gen) autofree_scope_vars2(scope &ast.Scope, start_pos int, end_pos int, line_nr int) {
 	if isnil(scope) {
 		return
 	}
@@ -1948,7 +1949,7 @@ fn (mut g Gen) autofree_scope_vars2(scope &ast.Scope, end_pos int) {
 				// continue
 				// }
 				v := *obj
-				if v.pos.pos > end_pos {
+				if v.pos.pos > end_pos || (v.pos.pos < start_pos && v.pos.line_nr == line_nr) {
 					// Do not free vars that were declared after this scope
 					continue
 				}
@@ -1971,7 +1972,7 @@ fn (mut g Gen) autofree_scope_vars2(scope &ast.Scope, end_pos int) {
 	// }
 	// ```
 	if !isnil(scope.parent) {
-		// g.autofree_scope_vars2(scope.parent, end_pos)
+		g.autofree_scope_vars2(scope.parent, start_pos, end_pos, line_nr)
 	}
 }
 
@@ -3801,7 +3802,7 @@ fn (mut g Gen) return_statement(node ast.Return, af bool) {
 		}
 		if free {
 			g.writeln('; // free tmp exprs')
-			g.autofree_scope_vars(node.pos.pos + 1)
+			g.autofree_scope_vars(node.pos.pos + 1, node.pos.line_nr)
 			g.write('return $tmp')
 		}
 	} else {
