@@ -9,6 +9,7 @@ fn f(mut m Mutex, mut l &bool) {
 	}
 }
 
+/*
 fn test_mutex_blocking() {
 	mut m1 := new_mutex()
 	mut l := true
@@ -22,6 +23,7 @@ fn test_mutex_blocking() {
 	time.sleep_ms(10)
 	assert l == true
 }
+*/
 
 fn test_mutex_try_lock() {
 	mut m1 := new_mutex()
