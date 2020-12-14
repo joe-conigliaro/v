@@ -681,6 +681,9 @@ pub fn (t &Table) mktyp(typ Type) Type {
 // Once we have a module format we can read from module file instead
 // this is not optimal
 pub fn (table &Table) qualify_module(mod string, file_path string) string {
+	if mod == 'main' {
+		return mod
+	}
 	if file_path.contains('vlib') {
 		x := file_path.all_after('vlib').trim(os.path_separator)
 		m_parts := x.split('/')
