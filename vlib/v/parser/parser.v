@@ -1615,7 +1615,7 @@ fn (mut p Parser) module_decl() ast.Module {
 		}
 		module_pos = module_pos.extend(pos)
 	}
-	mut full_mod := p.table.qualify_module(name, p.file_name)
+	mut full_mod := if is_skipped { name } else { p.table.qualify_module(name, p.file_name) }
 	p.mod = full_mod
 	p.builtin_mod = p.mod == 'builtin'
 	return ast.Module{
