@@ -300,12 +300,12 @@ pub fn (v &Builder) get_user_files() []string {
 			v.log('> add all .v files from directory "$dir" ...')
 		}
 		// Add .v files from the directory being compiled
-		build_whole_modules := ['sokol']
 		mut is_build_whole := false
 		if v.pref.build_mode == .build_module {
-			for m in build_whole_modules {
+			for m in v.package_submodules {
 				if dir.contains('$os.path_separator$m') {
 					user_files << v.get_whole_module_files(dir)
+					println(user_files)
 					is_build_whole = true
 					break
 				}

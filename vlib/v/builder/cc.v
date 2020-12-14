@@ -371,7 +371,13 @@ fn (mut v Builder) cc() {
 			libs += ' ' + builtin_obj_path
 			for ast_file in v.parsed_files {
 				for imp_stmt in ast_file.imports {
-					imp := imp_stmt.mod
+					mut imp := imp_stmt.mod
+					for ps in v.package_submodules {
+						if imp.starts_with('${ps}.') {
+							imp = ps
+							break
+						}
+					}
 					if imp in built_modules {
 						continue
 					}

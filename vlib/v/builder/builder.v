@@ -26,6 +26,7 @@ pub mut:
 	parsed_files        []ast.File
 	cached_msvc         MsvcResult
 	table               &table.Table
+	package_submodules  []string
 }
 
 pub fn new_builder(pref &pref.Preferences) Builder {
@@ -61,6 +62,7 @@ pub fn new_builder(pref &pref.Preferences) Builder {
 			100
 		}
 		cached_msvc: msvc
+		package_submodules: ['sokol']
 	}
 	// max_nr_errors: pref.error_limit ?? 100 TODO potential syntax?
 }
