@@ -1615,7 +1615,28 @@ fn (mut p Parser) module_decl() ast.Module {
 		}
 		module_pos = module_pos.extend(pos)
 	}
-	full_mod := p.table.qualify_module(name, p.file_name)
+	mut full_mod := p.table.qualify_module(name, p.file_name)
+	if p.pref.build_mode == .build_module && !full_mod.contains('.') {
+		// A hack to make building vlib modules work
+		// `v build-module v.gen` will result in `full_mod = "gen"`, not "v.gen",
+		// because the module being built
+		// is not imported.
+		// So here we fetch the name of the module by looking at the path that's being built.
+		/*
+		word := p.pref.path.after('/')
+		if full_mod == word {
+			full_mod = p.pref.path.after('vlib/').replace('/', '.')
+			// println('new full mod =$full_mod')
+		}
+		*/
+		if p.file_name.contains('vlib') {
+			x := p.file_name.all_after('vlib').trim(os.path_separator)
+			m_parts := x.split('/')
+			x1 := m_parts[..m_parts.len - 1].join('.')
+			full_mod = x1
+		}
+		// println('file_name=$p.file_name path=$p.pref.path')
+	}
 	p.mod = full_mod
 	p.builtin_mod = p.mod == 'builtin'
 	return ast.Module{

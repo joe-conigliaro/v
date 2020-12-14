@@ -930,7 +930,8 @@ fn (mut g Gen) stmt(node ast.Stmt) {
 				if node.mod != g.module_built && node.mod != g.module_built {
 					// Skip functions that don't have to be generated for this module.
 					// println('skip bm $node.name mod=$node.mod module_built=$g.module_built')
-					if g.module_built !in ['sokol'] && !node.mod.starts_with('${g.module_built}.') {
+					package_submodules := ['sokol']
+					if g.module_built !in package_submodules && !node.mod.starts_with('${g.module_built}.') {
 						skip = true
 					}
 				}
