@@ -192,6 +192,22 @@ pub fn (b &Builder) import_graph() &depgraph.DepGraph {
 	return graph
 }
 
+pub fn (b &Builder) get_whole_module_files(base string) []string {
+	mut files := []string{}
+	dir_files := os.ls(base) or { [] }
+	for file in dir_files {
+		if file == 'audio' {
+			continue
+		}
+		path := base + os.path_separator + file
+		if os.is_dir(path) {
+			files << b.get_whole_module_files(path)
+		}
+	}
+	files << b.v_files_from_dir(base)
+	return files
+}
+
 pub fn (b Builder) v_files_from_dir(dir string) []string {
 	if !os.exists(dir) {
 		if dir == 'compiler' && os.is_dir('vlib') {

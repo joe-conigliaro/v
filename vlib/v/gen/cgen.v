@@ -127,6 +127,7 @@ mut:
 	aggregate_type_idx               int
 	returned_var_name                string // to detect that a var doesn't need to be freed since it's being returned
 	branch_parent_pos                int // used in BranchStmt (continue/break) for autofree stop position
+	hash_stmts                       []string
 }
 
 const (
@@ -930,7 +931,9 @@ fn (mut g Gen) stmt(node ast.Stmt) {
 				if mod != g.module_built && node.mod != g.module_built.after('/') {
 					// Skip functions that don't have to be generated for this module.
 					// println('skip bm $node.name mod=$node.mod module_built=$g.module_built')
-					skip = true
+					if g.module_built != 'sokol' {
+						skip = true
+					}
 				}
 				if g.is_builtin_mod && g.module_built == 'builtin' && node.mod == 'builtin' {
 					skip = false
@@ -1055,6 +1058,9 @@ fn (mut g Gen) stmt(node ast.Stmt) {
 			g.writeln('goto $node.name;')
 		}
 		ast.HashStmt {
+			if node.main in g.hash_stmts {
+				return
+			}
 			// #include etc
 			if node.kind == 'include' {
 				mut missing_message := 'Header file $node.main, needed for module `$node.mod` was not found.'
@@ -1081,6 +1087,7 @@ fn (mut g Gen) stmt(node ast.Stmt) {
 				g.includes.writeln('// defined by module `$node.mod`:')
 				g.includes.writeln('#define $node.main')
 			}
+			g.hash_stmts << node.main
 		}
 		ast.Import {}
 		ast.InterfaceDecl {

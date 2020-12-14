@@ -1,10 +1,9 @@
 module f
 
 import fontstash
-import sokol.c
 
 pub const (
-  used_import = fontstash.used_import + c.used_import
+	used_import = fontstash.used_import
 )
 
 /*
@@ -25,15 +24,7 @@ pub const (
 
 #flag darwin -lpng -lbz2 -lz
 */
-
-
-
-
-
-
 #flag linux -I.
-
-//#include "ft2build.h"
-
+// #include "ft2build.h"
 #define SOKOL_FONTSTASH_IMPL
 #include "util/sokol_fontstash.h"
