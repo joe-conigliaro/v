@@ -106,7 +106,9 @@ fn (mut g Gen) gen_fn_decl(it ast.FnDecl, skip bool) {
 				g.definitions.write('VV_LOCAL_SYMBOL ')
 			}
 		}
-		fn_header := if msvc_attrs.len > 0 { '$type_name $msvc_attrs ${name}(' } else { '$type_name ${name}(' }
+		static1 := if g.pref.build_mode == .build_module &&
+			g.module_built != it.mod && it.mod !in ['builtin', 'os', 'strconv', 'strings', 'gg'] { 'static ' } else { '' }
+		fn_header := if msvc_attrs.len > 0 { '$static1$type_name $msvc_attrs ${name}(' } else { '$static1$type_name ${name}(' }
 		g.definitions.write(fn_header)
 		g.write(fn_header)
 	}
