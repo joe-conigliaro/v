@@ -934,9 +934,10 @@ fn (mut g Gen) stmt(node ast.Stmt) {
 					// println('skip bm $node.name mod=$node.mod module_built=$g.module_built')
 					// package_submodules := ['sokol']
 					// if g.module_built !in package_submodules && !node.mod.starts_with('${g.module_built}.') {
-					if !node.mod.starts_with('sokol.') {
-						skip = true
-					}
+					skip = true
+				}
+				if node.mod.starts_with('sokol') || node.mod == 'gg' || node.mod == 'fontstash' {
+					skip = true
 				}
 				if g.is_builtin_mod && g.module_built == 'builtin' && node.mod == 'builtin' {
 					skip = false
@@ -948,7 +949,8 @@ fn (mut g Gen) stmt(node ast.Stmt) {
 			if g.pref.use_cache {
 				// We are using prebuilt modules, we do not need to generate
 				// their functions in main.c.
-				if node.mod != 'main' && node.mod != 'help' {
+				if node.mod != 'main' &&
+					node.mod != 'help' && !node.mod.starts_with('sokol') && node.mod != 'gg' && node.mod != 'fontstash' {
 					skip = true
 				}
 			}
@@ -1098,7 +1100,7 @@ fn (mut g Gen) stmt(node ast.Stmt) {
 		}
 		ast.Module {
 			// g.is_builtin_mod = node.name == 'builtin'
-			g.is_builtin_mod = node.name in ['builtin', 'os', 'strconv', 'strings', 'gg']
+			g.is_builtin_mod = node.name in ['builtin', 'os', 'strconv', 'strings']
 			// g.cur_mod = node.name
 			g.cur_mod = node
 		}

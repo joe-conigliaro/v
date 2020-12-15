@@ -301,6 +301,7 @@ pub fn (v &Builder) get_user_files() []string {
 		}
 		// Add .v files from the directory being compiled
 		mut is_build_whole := false
+		/*
 		if v.pref.build_mode == .build_module {
 			for m in v.package_submodules {
 				if dir.contains('$os.path_separator$m') {
@@ -311,6 +312,7 @@ pub fn (v &Builder) get_user_files() []string {
 				}
 			}
 		}
+		*/
 		if !is_build_whole {
 			user_files << v.v_files_from_dir(dir)
 		}
