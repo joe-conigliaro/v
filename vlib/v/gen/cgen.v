@@ -927,7 +927,8 @@ fn (mut g Gen) stmt(node ast.Stmt) {
 				// println('!!! $node.name mod=$node.mod, built=$g.module_built')
 				// }
 				// TODO true for not just "builtin"
-				if node.mod != g.module_built && node.mod != g.module_built {
+				mod := if g.is_builtin_mod { 'builtin' } else { node.name.all_before_last('.') }
+				if mod != g.module_built && node.mod != g.module_built.after('/') {
 					// Skip functions that don't have to be generated for this module.
 					// println('skip bm $node.name mod=$node.mod module_built=$g.module_built')
 					package_submodules := ['sokol']
