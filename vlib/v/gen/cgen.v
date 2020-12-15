@@ -20,7 +20,7 @@ const (
 	// same order as in token.Kind
 	cmp_str    = ['eq', 'ne', 'gt', 'lt', 'ge', 'le']
 	// when operands are switched
-	cmp_rev    = ['eq', 'ne', 'le', 'ge', 'lt', 'gt']
+	cmp_rev    = ['eq', 'ne', 'lt', 'gt', 'le', 'ge']
 )
 
 struct Gen {
@@ -116,6 +116,7 @@ mut:
 	called_fn_name                   string
 	cur_mod                          ast.Module
 	is_js_call                       bool // for handling a special type arg #1 `json.decode(User, ...)`
+	is_fn_index_call                 bool
 	// nr_vars_to_free       int
 	// doing_autofree_tmp    bool
 	inside_lambda                    bool
@@ -531,7 +532,7 @@ fn (g &Gen) cc_type2(t table.Type) string {
 			mut sgtyps := '_T'
 			for gt in sym.info.generic_types {
 				gts := g.table.get_type_symbol(if gt.has_flag(.generic) { g.unwrap_generic(gt) } else { gt })
-				sgtyps += '_$gts.name'
+				sgtyps += '_$gts.cname'
 			}
 			styp += sgtyps
 		}
@@ -3772,6 +3773,12 @@ fn (mut g Gen) index_expr(node ast.IndexExpr) {
 					}
 					if is_direct_array_access {
 						g.write('(($array_ptr_type_str)')
+					} else if g.is_fn_index_call {
+						if elem_typ.info is table.FnType {
+							g.write('((')
+							g.write_fn_ptr_decl(&elem_typ.info, '')
+							g.write(')(*($array_ptr_type_str)/*ee elem_typ */array_get(')
+						}
 					} else {
 						g.write('(*($array_ptr_type_str)/*ee elem_typ */array_get(')
 						if left_is_ptr && !node.left_type.has_flag(.shared_f) {
@@ -3799,7 +3806,11 @@ fn (mut g Gen) index_expr(node ast.IndexExpr) {
 					} else {
 						g.write(', ')
 						g.expr(node.index)
-						g.write('))')
+						if g.is_fn_index_call {
+							g.write(')))')
+						} else {
+							g.write('))')
+						}
 					}
 					if needs_clone {
 						g.write(')')
@@ -4323,6 +4334,9 @@ fn (mut g Gen) struct_init(struct_init ast.StructInit) {
 			if field.name in inited_fields {
 				sfield := struct_init.fields[inited_fields[field.name]]
 				field_name := c_name(sfield.name)
+				if sfield.typ == 0 {
+					continue
+				}
 				g.write('.$field_name = ')
 				field_type_sym := g.table.get_type_symbol(sfield.typ)
 				mut cloned := false
