@@ -372,7 +372,7 @@ fn (mut v Builder) cc() {
 			for ast_file in v.parsed_files {
 				for imp_stmt in ast_file.imports {
 					mut imp := imp_stmt.mod
-					if imp.starts_with('sokol') || imp == 'gg' || imp == 'fontstash' {
+					if imp.starts_with('sokol') || imp in ['gg', 'gx', 'fontstash'] {
 						continue
 					}
 					/*

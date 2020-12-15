@@ -936,7 +936,7 @@ fn (mut g Gen) stmt(node ast.Stmt) {
 					// if g.module_built !in package_submodules && !node.mod.starts_with('${g.module_built}.') {
 					skip = true
 				}
-				if node.mod.starts_with('sokol') || node.mod == 'gg' || node.mod == 'fontstash' {
+				if node.mod.starts_with('sokol') || node.mod in ['gg', 'gx', 'fontstash'] {
 					skip = true
 				}
 				if g.is_builtin_mod && g.module_built == 'builtin' && node.mod == 'builtin' {
@@ -950,7 +950,7 @@ fn (mut g Gen) stmt(node ast.Stmt) {
 				// We are using prebuilt modules, we do not need to generate
 				// their functions in main.c.
 				if node.mod != 'main' &&
-					node.mod != 'help' && !node.mod.starts_with('sokol') && node.mod != 'gg' && node.mod != 'fontstash' {
+					node.mod != 'help' && !node.mod.starts_with('sokol') && node.mod !in ['gg', 'gx', 'fontstash'] {
 					skip = true
 				}
 			}
