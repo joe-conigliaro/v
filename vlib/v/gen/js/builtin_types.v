@@ -165,6 +165,9 @@ pub fn (mut g JsGen) typ(t table.Type) string {
 		.aggregate {
 			panic('TODO: unhandled aggregate in JS')
 		}
+		.optional {
+			// TODO ?
+		}
 	}
 	/*
 	else {

@@ -374,7 +374,7 @@ pub fn (mut g Gen) init() {
 		g.write_str_fn_definitions()
 	}
 	g.write_sorted_types()
-	g.write_multi_return_types()
+	// g.write_multi_return_types()
 	g.definitions.writeln('// end of definitions #endif')
 	//
 	g.stringliterals.writeln('')
@@ -456,7 +456,11 @@ fn (mut g Gen) typ(t table.Type) string {
 	styp := g.base_type(t)
 	if t.has_flag(.optional) {
 		// Register an optional if it's not registered yet
-		return g.register_optional(t)
+		mut styp2 := 'Option_' + styp
+		if t.is_ptr() {
+			styp2 = styp2.replace('*', '_ptr')
+		}
+		return styp2
 	}
 	/*
 	if styp.starts_with('C__') {
@@ -492,41 +496,41 @@ fn (mut g Gen) optional_type_name(t table.Type) (string, string) {
 	return styp, base
 }
 
-fn (g &Gen) optional_type_text(styp string, base string) string {
-	x := styp // .replace('*', '_ptr')			// handle option ptrs
-	// replace void with something else
-	size := if base == 'void' { 'int' } else { base }
-	ret := 'struct $x {
-	bool ok;
-	bool is_none;
-	string v_error;
-	int ecode;
-	byte data[sizeof($size)];
-}'
-	return ret
-}
+// fn (g &Gen) optional_type_text(styp string, base string) string {
+// 	x := styp // .replace('*', '_ptr')			// handle option ptrs
+// 	// replace void with something else
+// 	size := if base == 'void' { 'int' } else { base }
+// 	ret := 'struct $x {
+// 	bool ok;
+// 	bool is_none;
+// 	string v_error;
+// 	int ecode;
+// 	byte data[sizeof($size)];
+// }'
+// 	return ret
+// }
 
-fn (mut g Gen) register_optional(t table.Type) string {
-	// g.typedefs2.writeln('typedef Option $x;')
-	styp, base := g.optional_type_name(t)
-	if styp !in g.optionals {
-		no_ptr := base.replace('*', '_ptr')
-		typ := if base == 'void' { 'void*' } else { base }
-		g.options_typedefs.writeln('typedef struct {
-			$typ  data;
-			string error;
-			int    ecode;
-			bool   ok;
-			bool   is_none;
-		} Option2_$no_ptr;')
-		// println(styp)
-		g.typedefs2.writeln('typedef struct $styp $styp;')
-		g.options.write(g.optional_type_text(styp, base))
-		g.options.writeln(';\n')
-		g.optionals << styp.clone()
-	}
-	return styp
-}
+// fn (mut g Gen) register_optional(t table.Type) string {
+// 	// g.typedefs2.writeln('typedef Option $x;')
+// 	styp, base := g.optional_type_name(t)
+// 	if styp !in g.optionals {
+// 		no_ptr := base.replace('*', '_ptr')
+// 		typ := if base == 'void' { 'void*' } else { base }
+// 		g.options_typedefs.writeln('typedef struct {
+// 			$typ  data;
+// 			string error;
+// 			int    ecode;
+// 			bool   ok;
+// 			bool   is_none;
+// 		} Option2_$no_ptr;')
+// 		// println(styp)
+// 		g.typedefs2.writeln('typedef struct $styp $styp;')
+// 		g.options.write(g.optional_type_text(styp, base))
+// 		g.options.writeln(';\n')
+// 		g.optionals << styp.clone()
+// 	}
+// 	return styp
+// }
 
 fn (mut g Gen) find_or_register_shared(t table.Type, base string) string {
 	sh_typ := '__shared__$base'
@@ -4824,22 +4828,6 @@ fn (mut g Gen) write_types(types []table.TypeSymbol) {
 				}
 				if typ.info.fields.len > 0 || typ.info.embeds.len > 0 {
 					for field in typ.info.fields {
-						// Some of these structs may want to contain
-						// optionals that may not be defined at this point
-						// if this is the case then we are going to
-						// buffer manip out in front of the struct
-						// write the optional in and then continue
-						if field.typ.has_flag(.optional) {
-							// Dont use g.typ() here becuase it will register
-							// optional and we dont want that
-							last_text := g.type_definitions.after(start_pos).clone()
-							g.type_definitions.go_back_to(start_pos)
-							styp, base := g.optional_type_name(field.typ)
-							g.optionals << styp
-							g.typedefs2.writeln('typedef struct $styp $styp;')
-							g.type_definitions.writeln('${g.optional_type_text(styp, base)};')
-							g.type_definitions.write(last_text)
-						}
 						type_name := g.typ(field.typ)
 						field_name := c_name(field.name)
 						g.type_definitions.writeln('\t$type_name $field_name;')
@@ -4850,6 +4838,27 @@ fn (mut g Gen) write_types(types []table.TypeSymbol) {
 				// g.type_definitions.writeln('} $name;\n')
 				//
 				g.type_definitions.writeln('};\n')
+			}
+			table.Optional {
+				g.typedefs.writeln('typedef struct $name $name;')
+				// Current
+				size := if typ.info.typ == table.void_type { 'int' } else { g.table.get_type_symbol(typ.info.typ).cname }
+				g.type_definitions.writeln('struct $name {')
+				g.type_definitions.writeln('\tbyte data[sizeof($size)];')
+				g.type_definitions.writeln('\tstring v_error;')
+				g.type_definitions.writeln('\tint    ecode;')
+				g.type_definitions.writeln('\tbool   ok;')
+				g.type_definitions.writeln('\tbool   is_none;')
+				g.type_definitions.writeln('};')
+				// New
+				// g.type_definitions.writeln('struct $name {')
+				// g.type_definitions.writeln('\t$typ  data;')
+				// g.type_definitions.writeln('\tstring error;')
+				// g.type_definitions.writeln('\tint    ecode;')
+				// g.type_definitions.writeln('\tbool   ok;')
+				// g.type_definitions.writeln('\tbool   is_none;')
+				// g.type_definitions.writeln('};')
+
 			}
 			table.Alias {
 				// table.Alias { TODO
@@ -4884,6 +4893,15 @@ fn (mut g Gen) write_types(types []table.TypeSymbol) {
 				}
 				g.type_definitions.writeln('typedef $fixed $styp [$len];')
 				// }
+			}
+			table.MultiReturn {
+				g.typedefs.writeln('typedef struct $name $name;')
+				g.type_definitions.writeln('struct $name {')
+				for i, mr_typ in typ.info.types {
+					type_name := g.typ(mr_typ)
+					g.type_definitions.writeln('\t$type_name arg$i;')
+				}
+				g.type_definitions.writeln('};\n')
 			}
 			else {}
 		}
@@ -4933,6 +4951,22 @@ fn (g &Gen) sort_structs(typesa []table.TypeSymbol) []table.TypeSymbol {
 					}
 					field_deps << dep
 				}
+			}
+			table.MultiReturn {
+				for mr_type in t.info.types {
+					dep := g.table.get_type_symbol(mr_type).name
+					if dep !in type_names || dep in field_deps {
+						continue
+					}
+					field_deps << dep
+				}
+			}
+			table.Optional {
+				dep := g.table.get_type_symbol(t.info.typ).name
+				if dep !in type_names || dep in field_deps {
+					continue
+				}
+				field_deps << dep
 			}
 			// table.Interface {}
 			else {}

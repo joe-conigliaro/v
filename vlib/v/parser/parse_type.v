@@ -162,6 +162,7 @@ pub fn (mut p Parser) parse_type() table.Type {
 		if p.tok.line_nr > line_nr {
 			mut typ := table.void_type
 			if is_optional {
+				p.table.find_or_register_optional(typ)
 				typ = typ.set_flag(.optional)
 			}
 			return typ
@@ -200,9 +201,6 @@ pub fn (mut p Parser) parse_type() table.Type {
 			return 0
 		}
 	}
-	if is_optional {
-		typ = typ.set_flag(.optional)
-	}
 	if is_shared {
 		typ = typ.set_flag(.shared_f)
 	}
@@ -217,6 +215,10 @@ there is no need to use a reference to an array (e.g. use `[]string` instead of 
 If you need to modify an array in a function, use a mutable argument instead: `fn foo(mut s []string) {}`.')
 			return 0
 		}
+	}
+	if is_optional {
+		p.table.find_or_register_optional(typ)
+		typ = typ.set_flag(.optional)
 	}
 	return typ
 }

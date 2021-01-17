@@ -16,7 +16,7 @@ import strings
 pub type Type = int
 
 pub type TypeInfo = Aggregate | Alias | Array | ArrayFixed | Chan | Enum | FnType | GenericStructInst |
-	Interface | Map | MultiReturn | Struct | SumType
+	Interface | Map | MultiReturn | Struct | SumType | Optional
 
 pub enum Language {
 	v
@@ -417,6 +417,7 @@ pub enum Kind {
 	float_literal
 	int_literal
 	aggregate
+	optional
 }
 
 pub fn (t &TypeSymbol) str() string {
@@ -592,6 +593,7 @@ pub fn (k Kind) str() string {
 		.generic_struct_inst { 'generic_struct_inst' }
 		.rune { 'rune' }
 		.aggregate { 'aggregate' }
+		.optional { 'optional' }
 	}
 	return k_str
 }
@@ -708,6 +710,11 @@ pub mut:
 pub struct SumType {
 pub:
 	variants []Type
+}
+
+pub struct Optional {
+pub:
+	typ Type
 }
 
 // human readable type name

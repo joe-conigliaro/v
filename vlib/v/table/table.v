@@ -757,3 +757,29 @@ pub fn (table &Table) has_deep_child_no_ref(ts &TypeSymbol, name string) bool {
 	}
 	return false
 }
+
+pub fn (mut t Table) find_or_register_optional(typ Type) int {
+	sym := t.get_type_symbol(typ)
+	mut base := sym.cname
+	if sym.language == .c {
+		base = base[3..]
+	}
+	mut name := 'Option_$base'
+	for _ in 0 .. typ.nr_muls() {
+		name += '_ptr'
+	}
+	idx := t.type_idxs[name]
+	if idx > 0 {
+		return idx
+	}
+	return t.register_type_symbol(TypeSymbol{
+		kind: .optional
+		language: .v
+		name: name
+		cname: util.no_dots(name)
+		info: Optional{
+			typ: typ
+		}
+		is_public: true
+	})
+}

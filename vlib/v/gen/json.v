@@ -40,7 +40,6 @@ fn (mut g Gen) gen_json_for_type(typ table.Type) {
 	// Code gen decoder
 	dec_fn_name := js_dec_name(styp)
 	// Make sure that this optional type actually exists
-	g.register_optional(utyp)
 	dec_fn_dec := 'Option_$styp ${dec_fn_name}(cJSON* root)'
 	dec.writeln('
 $dec_fn_dec {
