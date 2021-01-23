@@ -11,6 +11,10 @@ const skip_files = [
 		'vlib/v/checker/tests/custom_comptime_define_if_flag.vv',
 	]
 
+const skip_on_ubuntu_musl = [
+		'vlib/v/checker/tests/vweb_tmpl_used_var.vv',
+]
+
 const turn_off_vcolors = os.setenv('VCOLORS', 'never', true)
 
 const should_autofix = os.getenv('VAUTOFIX') != ''
@@ -36,12 +40,14 @@ fn test_all() {
 	os.chdir(vroot)
 	checker_dir := 'vlib/v/checker/tests'
 	parser_dir := 'vlib/v/parser/tests'
+	scanner_dir := 'vlib/v/scanner/tests'
 	module_dir := '$checker_dir/modules'
 	global_dir := '$checker_dir/globals'
 	run_dir := '$checker_dir/run'
 	//
 	checker_tests := get_tests_in_dir(checker_dir, false)
 	parser_tests := get_tests_in_dir(parser_dir, false)
+	scanner_tests := get_tests_in_dir(scanner_dir, false)
 	global_tests := get_tests_in_dir(global_dir, false)
 	module_tests := get_tests_in_dir(module_dir, true)
 	run_tests := get_tests_in_dir(run_dir, false)
@@ -49,6 +55,7 @@ fn test_all() {
 	mut tasks := []TaskDescription{}
 	tasks.add(vexe, parser_dir, '-prod', '.out', parser_tests, false)
 	tasks.add(vexe, checker_dir, '-prod', '.out', checker_tests, false)
+	tasks.add(vexe, scanner_dir, '-prod', '.out', scanner_tests, false)
 	tasks.add(vexe, checker_dir, '-d mysymbol run', '.mysymbol.run.out', ['custom_comptime_define_error.vv'],
 		false)
 	tasks.add(vexe, checker_dir, '-d mydebug run', '.mydebug.run.out', ['custom_comptime_define_if_flag.vv'],
@@ -89,6 +96,9 @@ fn (mut tasks []TaskDescription) run() {
 	mut work := sync.new_channel<TaskDescription>(tasks.len)
 	mut results := sync.new_channel<TaskDescription>(tasks.len)
 	mut m_skip_files := skip_files.clone()
+	if os.getenv('V_CI_UBUNTU_MUSL').len > 0 {
+		m_skip_files << skip_on_ubuntu_musl
+	}
 	$if noskip ? {
 		m_skip_files = []
 	}
@@ -168,6 +178,9 @@ fn (mut task TaskDescription) execute() {
 	cli_cmd := '$task.vexe $task.voptions $program'
 	res := os.exec(cli_cmd) or { panic(err) }
 	expected_out_path := program.replace('.vv', '') + task.result_extension
+	if should_autofix && !os.exists(expected_out_path) {
+		os.write_file(expected_out_path, '')
+	}
 	mut expected := os.read_file(expected_out_path) or { panic(err) }
 	task.expected = clean_line_endings(expected)
 	task.found___ = clean_line_endings(res.output)

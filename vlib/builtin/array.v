@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2021 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 module builtin
@@ -229,6 +229,16 @@ fn (a array) get(i int) voidptr {
 	}
 }
 
+// Private function. Used to implement x = a[i] or { ... }
+fn (a array) get_with_check(i int) voidptr {
+	if i < 0 || i >= a.len {
+		return 0
+	}
+	unsafe {
+		return byteptr(a.data) + i * a.element_size
+	}
+}
+
 // first returns the first element of the array.
 pub fn (a array) first() voidptr {
 	$if !no_bounds_checking ? {
@@ -336,16 +346,24 @@ pub fn (a &array) clone() array {
 	// Recursively clone-generated elements if array element is array type
 	size_of_array := int(sizeof(array))
 	if a.element_size == size_of_array {
+		mut is_elem_array := true
 		for i in 0 .. a.len {
 			ar := array{}
 			unsafe { C.memcpy(&ar, a.get_unsafe(i), size_of_array) }
+			if ar.len > ar.cap || ar.cap <= 0 || ar.element_size <= 0 {
+				is_elem_array = false
+				break
+			}
 			ar_clone := ar.clone()
 			unsafe { arr.set_unsafe(i, &ar_clone) }
 		}
-	} else {
-		if !isnil(a.data) {
-			unsafe { C.memcpy(byteptr(arr.data), a.data, a.cap * a.element_size) }
+		if is_elem_array {
+			return arr
 		}
+	}
+
+	if !isnil(a.data) {
+		unsafe { C.memcpy(byteptr(arr.data), a.data, a.cap * a.element_size) }
 	}
 	return arr
 }

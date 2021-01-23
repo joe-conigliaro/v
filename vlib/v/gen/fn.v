@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2021 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 module gen
@@ -28,20 +28,20 @@ fn (mut g Gen) gen_fn_decl(it ast.FnDecl, skip bool) {
 	// if g.fileis('vweb.v') {
 	// println('\ngen_fn_decl() $it.name $it.is_generic $g.cur_generic_type')
 	// }
-	if it.is_generic && g.cur_generic_type == 0 { // need the cur_generic_type check to avoid inf. recursion
+	if it.generic_params.len > 0 && g.cur_generic_types.len == 0 { // need the cur_generic_type check to avoid inf. recursion
 		// loop thru each generic type and generate a function
-		for gen_type in g.table.fn_gen_types[it.name] {
-			sym := g.table.get_type_symbol(gen_type)
+		for gen_types in g.table.fn_gen_types[it.name] {
 			if g.pref.is_verbose {
-				println('gen fn `$it.name` for type `$sym.name`')
+				syms := gen_types.map(g.table.get_type_symbol(it))
+				println('gen fn `$it.name` for type `${syms.map(it.name).join(', ')}`')
 			}
-			g.cur_generic_type = gen_type
+			g.cur_generic_types = gen_types
 			g.gen_fn_decl(it, skip)
 		}
-		g.cur_generic_type = 0
+		g.cur_generic_types = []
 		return
 	}
-	// g.cur_fn = it
+	g.cur_fn = it
 	fn_start_pos := g.out.len
 	g.write_v_source_line_info(it.pos)
 	msvc_attrs := g.write_fn_attrs(it.attrs)
@@ -69,11 +69,14 @@ fn (mut g Gen) gen_fn_decl(it ast.FnDecl, skip bool) {
 		name = c_name(name)
 	}
 	mut type_name := g.typ(it.return_type)
-	if g.cur_generic_type != 0 {
+	if g.cur_generic_types.len > 0 {
 		// foo<T>() => foo_T_int(), foo_T_string() etc
-		gen_name := g.typ(g.cur_generic_type)
 		// Using _T_ to differentiate between get<string> and get_string
-		name += '_T_' + gen_name
+		name += '_T'
+		for generic_type in g.cur_generic_types {
+			gen_name := g.typ(generic_type)
+			name += '_' + gen_name
+		}
 	}
 	// if g.pref.show_cc && it.is_builtin {
 	// println(name)
@@ -107,7 +110,7 @@ fn (mut g Gen) gen_fn_decl(it ast.FnDecl, skip bool) {
 		if !(it.is_pub || g.pref.is_debug) {
 			// Private functions need to marked as static so that they are not exportable in the
 			// binaries
-			if g.pref.build_mode != .build_module {
+			if g.pref.build_mode != .build_module && !g.pref.use_cache {
 				// if !(g.pref.build_mode == .build_module && g.is_builtin_mod) {
 				// If we are building vlib/builtin, we need all private functions like array_get
 				// to be public, so that all V programs can access them.
@@ -127,7 +130,9 @@ fn (mut g Gen) gen_fn_decl(it ast.FnDecl, skip bool) {
 	fargs, fargtypes := g.fn_args(it.params, it.is_variadic)
 	arg_str := g.out.after(arg_start_pos)
 	if it.no_body ||
-		((g.pref.use_cache && g.pref.build_mode != .build_module) && it.is_builtin) || skip {
+		((g.pref.use_cache && g.pref.build_mode != .build_module) && it.is_builtin && !g.is_test) ||
+		skip
+	{
 		// Just a function header. Builtin function bodies are defined in builtin.o
 		g.definitions.writeln(');') // // NO BODY')
 		g.writeln(');')
@@ -160,7 +165,7 @@ fn (mut g Gen) gen_fn_decl(it ast.FnDecl, skip bool) {
 		g.hotcode_definitions.writeln('}')
 	}
 	// Profiling mode? Start counting at the beginning of the function (save current time).
-	if g.pref.is_prof {
+	if g.pref.is_prof && g.pref.build_mode != .build_module {
 		g.profile_fn(it)
 	}
 	// we could be in an anon fn so save outer fn defer stmts
@@ -240,13 +245,7 @@ fn (mut g Gen) fn_args(args []table.Param, is_variadic bool) ([]string, []string
 				g.definitions.write(')')
 			}
 		} else {
-			// TODO: combine two operations into one once ternary in expression is fixed
-			mut s := if arg_type_sym.kind == .array_fixed {
-				arg_type_name.trim('*')
-			} else {
-				arg_type_name
-			}
-			s += ' ' + caname
+			s := '$arg_type_name $caname'
 			g.write(s)
 			g.definitions.write(s)
 			fargs << caname
@@ -297,7 +296,8 @@ fn (mut g Gen) call_expr(node ast.CallExpr) {
 	}
 	if node.is_method && !node.is_field {
 		if node.name == 'writeln' && g.pref.experimental && node.args.len > 0 && node.args[0].expr is
-			ast.StringInterLiteral && g.table.get_type_symbol(node.receiver_type).name == 'strings.Builder' {
+			ast.StringInterLiteral && g.table.get_type_symbol(node.receiver_type).name == 'strings.Builder'
+		{
 			g.string_inter_literal_sb_optimized(node)
 		} else {
 			g.method_call(node)
@@ -317,11 +317,17 @@ fn (mut g Gen) call_expr(node ast.CallExpr) {
 	}
 }
 
-[inline]
 pub fn (g &Gen) unwrap_generic(typ table.Type) table.Type {
 	if typ.has_flag(.generic) {
-		// return g.cur_generic_type
-		return g.cur_generic_type.derive(typ).clear_flag(.generic)
+		sym := g.table.get_type_symbol(typ)
+		mut idx := 0
+		for i, generic_param in g.cur_fn.generic_params {
+			if generic_param.name == sym.name {
+				idx = i
+				break
+			}
+		}
+		return g.cur_generic_types[0].derive(typ).clear_flag(.generic)
 	}
 	return typ
 }
@@ -394,7 +400,7 @@ fn (mut g Gen) method_call(node ast.CallExpr) {
 		}
 	}
 	if left_sym.kind == .sum_type && node.name == 'type_name' {
-		g.write('tos3( /* $left_sym.name */ v_typeof_sumtype_${node.receiver_type}( (')
+		g.write('tos3( /* $left_sym.name */ v_typeof_sumtype_${typ_sym.cname}( (')
 		g.expr(node.left)
 		g.write(').typ ))')
 		return
@@ -408,7 +414,8 @@ fn (mut g Gen) method_call(node ast.CallExpr) {
 	}
 	// TODO performance, detect `array` method differently
 	if left_sym.kind == .array && node.name in
-		['repeat', 'sort_with_compare', 'free', 'push_many', 'trim', 'first', 'last', 'pop', 'clone', 'reverse', 'slice'] {
+		['repeat', 'sort_with_compare', 'free', 'push_many', 'trim', 'first', 'last', 'pop', 'clone', 'reverse', 'slice']
+	{
 		// && rec_sym.name == 'array' {
 		// && rec_sym.name == 'array' && receiver_name.starts_with('array') {
 		// `array_byte_clone` => `array_clone`
@@ -444,10 +451,15 @@ fn (mut g Gen) method_call(node ast.CallExpr) {
 			}
 		}
 	}
-	if node.generic_type != table.void_type && node.generic_type != 0 {
-		// Using _T_ to differentiate between get<string> and get_string
-		// `foo<int>()` => `foo_T_int()`
-		name += '_T_' + g.typ(node.generic_type)
+	for i, generic_type in node.generic_types {
+		if generic_type != table.void_type && generic_type != 0 {
+			// Using _T_ to differentiate between get<string> and get_string
+			// `foo<int>()` => `foo_T_int()`
+			if i == 0 {
+				name += '_T'
+			}
+			name += '_' + g.typ(generic_type)
+		}
 	}
 	// TODO2
 	// g.generate_tmp_autofree_arg_vars(node, name)
@@ -469,7 +481,8 @@ fn (mut g Gen) method_call(node ast.CallExpr) {
 			g.write('&')
 		}
 	} else if !node.receiver_type.is_ptr() && node.left_type.is_ptr() && node.name != 'str' &&
-		node.from_embed_type == 0 {
+		node.from_embed_type == 0
+	{
 		g.write('/*rec*/*')
 	}
 	if g.is_autofree && node.free_receiver && !g.inside_lambda && !g.is_builtin_mod {
@@ -587,10 +600,13 @@ fn (mut g Gen) fn_call(node ast.CallExpr) {
 	} else {
 		name = c_name(name)
 	}
-	if node.generic_type != table.void_type && node.generic_type != 0 {
+	for i, generic_type in node.generic_types {
 		// Using _T_ to differentiate between get<string> and get_string
 		// `foo<int>()` => `foo_T_int()`
-		name += '_T_' + g.typ(node.generic_type)
+		if i == 0 {
+			name += '_T'
+		}
+		name += '_' + g.typ(generic_type)
 	}
 	// TODO2
 	// cgen shouldn't modify ast nodes, this should be moved

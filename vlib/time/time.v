@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2021 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 module time
@@ -158,8 +158,8 @@ pub fn new_time(t Time) Time {
 		tm_year: t.year - 1900
 	}
 	utime := u64(make_unix_time(tt))
-	return {
-		t |
+	return Time{
+		...t
 		unix: utime
 	}
 }

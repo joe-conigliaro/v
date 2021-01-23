@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2021 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 // Package md5 implements the MD5 hash algorithm as defined in RFC 1321.
@@ -51,7 +51,7 @@ pub fn new() &Digest {
 	return d
 }
 
-pub fn (mut d Digest) write(p_ []byte) int {
+fn (mut d Digest) write(p_ []byte) int {
 	unsafe {
 		mut p := p_
 		nn := p.len
@@ -85,7 +85,7 @@ pub fn (mut d Digest) write(p_ []byte) int {
 	}
 }
 
-pub fn (d &Digest) sum(b_in []byte) []byte {
+fn (d &Digest) sum(b_in []byte) []byte {
 	// Make a copy of d so that caller can keep writing and summing.
 	mut d0 := *d
 	hash := d0.checksum()

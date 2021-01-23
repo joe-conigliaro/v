@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2021 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 module gen
@@ -18,7 +18,8 @@ fn (mut g Gen) comptime_selector(node ast.ComptimeSelector) {
 	if node.field_expr is ast.SelectorExpr {
 		if node.field_expr.expr is ast.Ident {
 			if node.field_expr.expr.name == g.comp_for_field_var &&
-				node.field_expr.field_name == 'name' {
+				node.field_expr.field_name == 'name'
+			{
 				g.write(g.comp_for_field_value.name)
 				return
 			}
@@ -28,6 +29,10 @@ fn (mut g Gen) comptime_selector(node ast.ComptimeSelector) {
 }
 
 fn (mut g Gen) comptime_call(node ast.ComptimeCall) {
+	if node.is_embed {
+		g.gen_embed_file_init(node)
+		return
+	}
 	if node.is_vweb {
 		is_html := node.method_name == 'html'
 		for stmt in node.vweb_tmpl.stmts {
@@ -207,6 +212,11 @@ fn (mut g Gen) comp_if(node ast.IfExpr) {
 			}
 			if should_create_scope {
 				g.writeln('}')
+			}
+			if !comp_if_stmts_skip && branch.cond is ast.InfixExpr {
+				if (branch.cond as ast.InfixExpr).op == .key_is {
+					break
+				}
 			}
 		}
 		g.defer_ifdef = ''

@@ -1,9 +1,8 @@
-// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2021 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 module table
 
-import os
 import v.cflag
 import v.token
 import v.util
@@ -17,7 +16,7 @@ pub mut:
 	modules       []string // Topologically sorted list of all modules registered by the application
 	cflags        []cflag.CFlag
 	redefined_fns []string
-	fn_gen_types  map[string][]Type // for generic functions
+	fn_gen_types  map[string][][]Type // for generic functions
 	cmod_prefix   string // needed for table.type_to_str(Type) while vfmt; contains `os.`
 	is_fmt        bool
 }
@@ -28,7 +27,7 @@ pub:
 	return_type    Type
 	is_variadic    bool
 	language       Language
-	is_generic     bool
+	generic_names  []string
 	is_pub         bool
 	is_deprecated  bool
 	is_unsafe      bool
@@ -43,8 +42,8 @@ pub mut:
 
 fn (f &Fn) method_equals(o &Fn) bool {
 	return f.params[1..].equals(o.params[1..]) && f.return_type == o.return_type && f.is_variadic ==
-		o.is_variadic && f.language == o.language && f.is_generic == o.is_generic && f.is_pub == o.is_pub &&
-		f.mod == o.mod && f.name == o.name
+		o.is_variadic && f.language == o.language && f.generic_names == o.generic_names &&
+		f.is_pub == o.is_pub && f.mod == o.mod && f.name == o.name
 }
 
 pub struct Param {
@@ -53,6 +52,7 @@ pub:
 	name      string
 	is_mut    bool
 	typ       Type
+	type_pos  token.Position
 	is_hidden bool // interface first arg
 }
 
@@ -355,8 +355,8 @@ pub fn (mut t Table) register_type_symbol(typ TypeSymbol) int {
 			.placeholder {
 				// override placeholder
 				// println('overriding type placeholder `$typ.name`')
-				t.types[existing_idx] = {
-					typ |
+				t.types[existing_idx] = TypeSymbol{
+					...typ
 					methods: ex_type.methods
 				}
 				return existing_idx
@@ -368,8 +368,8 @@ pub fn (mut t Table) register_type_symbol(typ TypeSymbol) int {
 				if existing_idx >= string_type_idx && existing_idx <= map_type_idx {
 					if existing_idx == string_type_idx {
 						// existing_type := t.types[existing_idx]
-						t.types[existing_idx] = {
-							typ |
+						t.types[existing_idx] = TypeSymbol{
+							...typ
 							kind: ex_type.kind
 						}
 					} else {
@@ -454,6 +454,20 @@ pub fn (t &Table) chan_cname(elem_type Type, is_mut bool) string {
 	return 'chan_$elem_type_sym.cname' + suffix
 }
 
+[inline]
+pub fn (t &Table) gohandle_name(return_type Type) string {
+	return_type_sym := t.get_type_symbol(return_type)
+	ptr := if return_type.is_ptr() { '&' } else { '' }
+	return 'gohandle[$ptr$return_type_sym.name]'
+}
+
+[inline]
+pub fn (t &Table) gohandle_cname(return_type Type) string {
+	return_type_sym := t.get_type_symbol(return_type)
+	suffix := if return_type.is_ptr() { '_ptr' } else { '' }
+	return 'gohandle_$return_type_sym.cname$suffix'
+}
+
 // map_source_name generates the original name for the v source.
 // e. g. map[string]int
 [inline]
@@ -515,6 +529,27 @@ pub fn (mut t Table) find_or_register_map(key_type Type, value_type Type) int {
 		}
 	}
 	return t.register_type_symbol(map_typ)
+}
+
+pub fn (mut t Table) find_or_register_gohandle(return_type Type) int {
+	name := t.gohandle_name(return_type)
+	cname := t.gohandle_cname(return_type)
+	// existing
+	existing_idx := t.type_idxs[name]
+	if existing_idx > 0 {
+		return existing_idx
+	}
+	// register
+	gohandle_typ := TypeSymbol{
+		parent_idx: gohandle_type_idx
+		kind: .gohandle
+		name: name
+		cname: cname
+		info: GoHandle{
+			return_type: return_type
+		}
+	}
+	return t.register_type_symbol(gohandle_typ)
 }
 
 pub fn (mut t Table) find_or_register_array(elem_type Type) int {
@@ -688,31 +723,12 @@ pub fn (t &Table) mktyp(typ Type) Type {
 	}
 }
 
-// TODO: Once we have a module format we can read from module file instead
-// this is not optimal. it depends on the full import being in table.imports
-// already, we can instead lookup the module path and then work it out
-pub fn (table &Table) qualify_module(mod string, file_path string) string {
-	for m in table.imports {
-		// if m.contains('gen') { println('qm=$m') }
-		if m.contains('.') && m.contains(mod) {
-			m_parts := m.split('.')
-			m_path := m_parts.join(os.path_separator)
-			if mod == m_parts[m_parts.len - 1] && file_path.contains(m_path) {
-				return m
-			}
-		}
-	}
-	return mod
-}
-
-pub fn (mut table Table) register_fn_gen_type(fn_name string, typ Type) {
+pub fn (mut table Table) register_fn_gen_type(fn_name string, types []Type) {
 	mut a := table.fn_gen_types[fn_name]
-	if typ in a {
+	if types in a {
 		return
 	}
-	a << typ
-	// sym := table.get_type_symbol(typ)
-	// println('registering fn ($fn_name) gen type $sym.name')
+	a << types
 	table.fn_gen_types[fn_name] = a
 }
 

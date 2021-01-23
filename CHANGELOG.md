@@ -1,5 +1,8 @@
-## V 0.2.2
+## V 0.2.3
 *Not yet released*
+
+## V 0.2.2
+*22 Jan 2021*
 - `vweb` now uses struct embedding: `app.vweb.text('hello') => app.text('hello')`.
 - Consts can now be declared outside of `const()` blocks: `const x = 0`.
 - Overloading of  `>`, `<`, `!=`, `==`, `<=` and `>=` operators.
@@ -12,6 +15,12 @@
 - Support `[manualfree] fn f1(){}` and `[manualfree] module m1`, for functions doing their own memory management.
 - Allow usage of `<` and `>` operators for struct in `.sort` method for arrays, i.e. `arr.sort(a < b)`.
 - Auto generate assignment operators like `+=`, `-=`, `*=`, `/=` and `%=` if the operators are defined.
+- Colorize and improve failing tests output.
+- Fix `go` with a generic function: `go test<string>(c, 'abcd')`.
+- Add comptime `x := $embed_file('v.png') println(x.len) println(ptr_str(x.data()))`, for embedding files into binaries.
+- Advanced vdoc search on mobile layout.
+- string's `left()`/`right` were removed in favor of slicing syntax: `str[..pos]`.
+- gg: native graphics mode on macOS/iOS (using Cocoa Drawing API).
 
 ## V 0.2.1
 *30 Dec 2020*

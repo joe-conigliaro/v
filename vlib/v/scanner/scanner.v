@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2021 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 module scanner
@@ -162,6 +162,20 @@ fn (mut s Scanner) new_token(tok_kind token.Kind, lit string, len int) token.Tok
 }
 
 [inline]
+fn (mut s Scanner) new_mulitline_token(tok_kind token.Kind, lit string, len int, start_line int) token.Token {
+	cidx := s.tidx
+	s.tidx++
+	return token.Token{
+		kind: tok_kind
+		lit: lit
+		line_nr: start_line + 1
+		pos: s.pos - len + 1
+		len: len
+		tidx: cidx
+	}
+}
+
+[inline]
 fn (mut s Scanner) ident_name() string {
 	start := s.pos
 	s.pos++
@@ -198,12 +212,12 @@ fn (mut s Scanner) ident_bin_number() string {
 	mut first_wrong_digit := `\0`
 	start_pos := s.pos
 	s.pos += 2 // skip '0b'
-	if s.text[s.pos] == num_sep {
+	if s.pos < s.text.len && s.text[s.pos] == num_sep {
 		s.error('separator `_` is only valid between digits in a numeric literal')
 	}
 	for s.pos < s.text.len {
 		c := s.text[s.pos]
-		if c == num_sep && s.text[s.pos + 1] == num_sep {
+		if c == num_sep && s.text[s.pos - 1] == num_sep {
 			s.error('cannot use `_` consecutively')
 		}
 		if !c.is_bin_digit() && c != num_sep {
@@ -218,6 +232,7 @@ fn (mut s Scanner) ident_bin_number() string {
 		s.pos++
 	}
 	if s.text[s.pos - 1] == num_sep {
+		s.pos--
 		s.error('cannot use `_` at the end of a numeric literal')
 	} else if start_pos + 2 == s.pos {
 		s.pos-- // adjust error position
@@ -240,12 +255,12 @@ fn (mut s Scanner) ident_hex_number() string {
 		return '0x'
 	}
 	s.pos += 2 // skip '0x'
-	if s.text[s.pos] == num_sep {
+	if s.pos < s.text.len && s.text[s.pos] == num_sep {
 		s.error('separator `_` is only valid between digits in a numeric literal')
 	}
 	for s.pos < s.text.len {
 		c := s.text[s.pos]
-		if c == num_sep && s.text[s.pos + 1] == num_sep {
+		if c == num_sep && s.text[s.pos - 1] == num_sep {
 			s.error('cannot use `_` consecutively')
 		}
 		if !c.is_hex_digit() && c != num_sep {
@@ -260,6 +275,7 @@ fn (mut s Scanner) ident_hex_number() string {
 		s.pos++
 	}
 	if s.text[s.pos - 1] == num_sep {
+		s.pos--
 		s.error('cannot use `_` at the end of a numeric literal')
 	} else if start_pos + 2 == s.pos {
 		s.pos-- // adjust error position
@@ -279,12 +295,12 @@ fn (mut s Scanner) ident_oct_number() string {
 	mut first_wrong_digit := `\0`
 	start_pos := s.pos
 	s.pos += 2 // skip '0o'
-	if s.text[s.pos] == num_sep {
+	if s.pos < s.text.len && s.text[s.pos] == num_sep {
 		s.error('separator `_` is only valid between digits in a numeric literal')
 	}
 	for s.pos < s.text.len {
 		c := s.text[s.pos]
-		if c == num_sep && s.text[s.pos + 1] == num_sep {
+		if c == num_sep && s.text[s.pos - 1] == num_sep {
 			s.error('cannot use `_` consecutively')
 		}
 		if !c.is_oct_digit() && c != num_sep {
@@ -299,6 +315,7 @@ fn (mut s Scanner) ident_oct_number() string {
 		s.pos++
 	}
 	if s.text[s.pos - 1] == num_sep {
+		s.pos--
 		s.error('cannot use `_` at the end of a numeric literal')
 	} else if start_pos + 2 == s.pos {
 		s.pos-- // adjust error position
@@ -320,7 +337,7 @@ fn (mut s Scanner) ident_dec_number() string {
 	// scan integer part
 	for s.pos < s.text.len {
 		c := s.text[s.pos]
-		if c == num_sep && s.text[s.pos + 1] == num_sep {
+		if c == num_sep && s.text[s.pos - 1] == num_sep {
 			s.error('cannot use `_` consecutively')
 		}
 		if !c.is_digit() && c != num_sep {
@@ -335,6 +352,7 @@ fn (mut s Scanner) ident_dec_number() string {
 		s.pos++
 	}
 	if s.text[s.pos - 1] == num_sep {
+		s.pos--
 		s.error('cannot use `_` at the end of a numeric literal')
 	}
 	mut call_method := false // true for, e.g., 5.str(), 5.5.str(), 5e5.str()
@@ -540,11 +558,11 @@ fn (mut s Scanner) text_scan() token.Token {
 		} else {
 			s.is_started = true
 		}
-		if s.pos >= s.text.len {
-			return s.end_of_file()
-		}
 		if !s.is_inside_string {
 			s.skip_whitespace()
+		}
+		if s.pos >= s.text.len {
+			return s.end_of_file()
 		}
 		// End of $var, start next string
 		if s.is_inter_end {
@@ -884,11 +902,13 @@ fn (mut s Scanner) text_scan() token.Token {
 					s.pos++
 					return s.new_token(.ne, '', 2)
 				} else if s.text.len > s.pos + 3 &&
-					nextc == `i` && s.text[s.pos + 2] == `n` && s.text[s.pos + 3].is_space() {
+					nextc == `i` && s.text[s.pos + 2] == `n` && s.text[s.pos + 3].is_space()
+				{
 					s.pos += 2
 					return s.new_token(.not_in, '', 3)
 				} else if s.text.len > s.pos + 3 &&
-					nextc == `i` && s.text[s.pos + 2] == `s` && s.text[s.pos + 3].is_space() {
+					nextc == `i` && s.text[s.pos + 2] == `s` && s.text[s.pos + 3].is_space()
+				{
 					s.pos += 2
 					return s.new_token(.not_is, '', 3)
 				} else {
@@ -936,6 +956,7 @@ fn (mut s Scanner) text_scan() token.Token {
 				// Multiline comments
 				if nextc == `*` {
 					start := s.pos + 2
+					start_line := s.line_nr
 					mut nest_count := 1
 					// Skip comment
 					for nest_count > 0 && s.pos < s.text.len - 1 {
@@ -962,7 +983,8 @@ fn (mut s Scanner) text_scan() token.Token {
 						if !comment.contains('\n') {
 							comment = '\x01' + comment
 						}
-						return s.new_token(.comment, comment, comment.len + 4)
+						return s.new_mulitline_token(.comment, comment, comment.len + 4,
+							start_line)
 					}
 					// Skip if not in fmt mode
 					continue
@@ -1016,7 +1038,8 @@ fn (mut s Scanner) ident_string() string {
 	mut n_cr_chars := 0
 	mut start := s.pos
 	if s.text[start] == s.quote ||
-		(s.text[start] == s.inter_quote && (s.is_inter_start || s.is_enclosed_inter)) {
+		(s.text[start] == s.inter_quote && (s.is_inter_start || s.is_enclosed_inter))
+	{
 		start++
 	}
 	s.is_inside_string = false
@@ -1046,7 +1069,8 @@ fn (mut s Scanner) ident_string() string {
 		// Don't allow \0
 		if c == `0` && s.pos > 2 && prevc == slash {
 			if (s.pos < s.text.len - 1 && s.text[s.pos + 1].is_digit()) ||
-				s.count_symbol_before(s.pos - 1, slash) % 2 == 0 {
+				s.count_symbol_before(s.pos - 1, slash) % 2 == 0
+			{
 			} else if !is_cstr && !is_raw {
 				s.error(r'cannot use `\0` (NULL character) in the string literal')
 			}
@@ -1066,9 +1090,10 @@ fn (mut s Scanner) ident_string() string {
 			}
 			// Escape `\u`
 			if c == `u` && (s.text[s.pos + 1] == s.quote ||
-				s.text[s.pos + 2] == s.quote || s.text[s.pos + 3] == s.quote || s.text[s.pos + 4] == s.quote ||
-				!s.text[s.pos + 1].is_hex_digit() || !s.text[s.pos + 2].is_hex_digit() || !s.text[s.pos + 3].is_hex_digit() ||
-				!s.text[s.pos + 4].is_hex_digit()) {
+				s.text[s.pos + 2] == s.quote || s.text[s.pos + 3] == s.quote || s.text[s.pos +
+				4] == s.quote || !s.text[s.pos + 1].is_hex_digit() || !s.text[s.pos + 2].is_hex_digit() ||
+				!s.text[s.pos + 3].is_hex_digit() || !s.text[s.pos + 4].is_hex_digit())
+			{
 				s.error(r'`\u` incomplete unicode character value')
 			}
 		}
@@ -1082,7 +1107,8 @@ fn (mut s Scanner) ident_string() string {
 		}
 		// $var
 		if prevc == `$` && util.is_name_char(c) && !is_raw && s.count_symbol_before(s.pos - 2, slash) %
-			2 == 0 {
+			2 == 0
+		{
 			s.is_inside_string = true
 			s.is_inter_start = true
 			s.pos -= 2

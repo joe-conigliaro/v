@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2021 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 module ast
@@ -43,20 +43,32 @@ pub fn (node &FnDecl) stringify(t &table.Table, cur_mod string, m2a map[string]s
 		receiver = '($node.receiver.name $m$name) '
 		*/
 	}
-	mut name := if node.is_anon { '' } else { node.name.after_char(`.`) }
-	if !node.is_method {
-		if node.language == .c {
-			name = 'C.$name'
-		} else if node.language == .js {
-			name = 'JS.$name'
-		}
+	mut name := if node.is_anon { '' } else { node.name }
+	if !node.is_anon && !node.is_method && node.language == .v {
+		name = node.name.all_after_last('.')
 	}
+	// mut name := if node.is_anon { '' } else { node.name.after_char(`.`) }
+	// if !node.is_method {
+	// 	if node.language == .c {
+	// 		name = 'C.$name'
+	// 	} else if node.language == .js {
+	// 		name = 'JS.$name'
+	// 	}
+	// }
 	f.write('fn $receiver$name')
 	if name in ['+', '-', '*', '/', '%', '<', '>', '==', '!=', '>=', '<='] {
 		f.write(' ')
 	}
-	if node.is_generic {
-		f.write('<T>')
+	if node.generic_params.len > 0 {
+		f.write('<')
+		for i, param in node.generic_params {
+			is_last := i == node.generic_params.len - 1
+			f.write(param.name)
+			if !is_last {
+				f.write(', ')
+			}
+		}
+		f.write('>')
 	}
 	f.write('(')
 	for i, arg in node.params {
@@ -338,6 +350,9 @@ pub fn (node &BranchStmt) str() string {
 
 pub fn (node Stmt) str() string {
 	match node {
+		AssertStmt {
+			return 'assert $node.expr'
+		}
 		AssignStmt {
 			mut out := ''
 			for i, left in node.left {
