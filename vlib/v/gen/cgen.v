@@ -396,7 +396,7 @@ pub fn (mut g Gen) init() {
 		// _STR functions should not be defined in builtin.o
 		g.write_str_fn_definitions()
 	}
-	g.write_sorted_types()
+	// g.write_sorted_types()
 	// g.write_multi_return_types()
 	g.definitions.writeln('// end of definitions #endif')
 	//
@@ -433,6 +433,7 @@ pub fn (mut g Gen) init() {
 }
 
 pub fn (mut g Gen) finish() {
+	g.write_sorted_types()
 	if g.pref.build_mode != .build_module {
 		g.stringliterals.writeln('}')
 	}
@@ -578,7 +579,7 @@ static inline Option_void __Option_${styp}_pushval($styp ch, $el_type e) {
 
 // TODO: merge cc_type and cc_type2
 // cc_type but without the `struct` prefix
-fn (g &Gen) cc_type2(t table.Type) string {
+fn (mut g Gen) cc_type2(t table.Type) string {
 	sym := g.table.get_type_symbol(g.unwrap_generic(t))
 	mut styp := sym.cname
 	if mut sym.info is table.Struct {
@@ -600,7 +601,7 @@ fn (g &Gen) cc_type2(t table.Type) string {
 
 // cc_type returns the Cleaned Concrete Type name, *without ptr*,
 // i.e. it's always just Cat, not Cat_ptr:
-fn (g &Gen) cc_type(t table.Type) string {
+fn (mut g Gen) cc_type(t table.Type) string {
 	sym := g.table.get_type_symbol(g.unwrap_generic(t))
 	mut styp := g.cc_type2(t)
 	if styp.starts_with('C__') {
