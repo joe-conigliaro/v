@@ -184,7 +184,6 @@ pub fn (v Builder) get_builtin_files() []string {
 	// Lookup for built-in folder in lookup path.
 	// Assumption: `builtin/` folder implies usable implementation of builtin
 	for location in v.pref.lookup_path {
-		println('location: $location')
 		if os.exists(os.join_path(location, 'builtin')) {
 			mut builtin_files := []string{}
 			if v.pref.is_bare {

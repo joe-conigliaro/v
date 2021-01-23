@@ -66,7 +66,6 @@ mut:
 	is_shared           bool     // for initialization of hidden mutex in `[rw]shared` literals
 	is_vlines_enabled   bool     // is it safe to generate #line directives when -g is passed
 	vlines_path         string   // set to the proper path for generating #line directives
-	optionals           []string // to avoid duplicates TODO perf, use map
 	chan_pop_optionals  []string // types for `x := <-ch or {...}`
 	chan_push_optionals []string // types for `ch <- x or {...}`
 	shareds             []int    // types with hidden mutex for which decl has been emitted
@@ -531,42 +530,6 @@ fn (mut g Gen) optional_type_name(t table.Type) (string, string) {
 	}
 	return styp, base
 }
-
-// fn (g &Gen) optional_type_text(styp string, base string) string {
-// 	x := styp // .replace('*', '_ptr')			// handle option ptrs
-// 	// replace void with something else
-// 	size := if base == 'void' { 'int' } else { base }
-// 	ret := 'struct $x {
-// 	bool ok;
-// 	bool is_none;
-// 	string v_error;
-// 	int ecode;
-// 	byte data[sizeof($size)];
-// }'
-// 	return ret
-// }
-
-// fn (mut g Gen) register_optional(t table.Type) string {
-// 	// g.typedefs2.writeln('typedef Option $x;')
-// 	styp, base := g.optional_type_name(t)
-// 	if styp !in g.optionals {
-// 		no_ptr := base.replace('*', '_ptr')
-// 		typ := if base == 'void' { 'void*' } else { base }
-// 		g.options_typedefs.writeln('typedef struct {
-// 			$typ  data;
-// 			string error;
-// 			int    ecode;
-// 			bool   ok;
-// 			bool   is_none;
-// 		} Option2_$no_ptr;')
-// 		// println(styp)
-// 		g.typedefs2.writeln('typedef struct $styp $styp;')
-// 		g.options.write(g.optional_type_text(styp, base))
-// 		g.options.writeln(';\n')
-// 		g.optionals << styp.clone()
-// 	}
-// 	return styp
-// }
 
 fn (mut g Gen) find_or_register_shared(t table.Type, base string) string {
 	sh_typ := '__shared__$base'
@@ -5037,7 +5000,6 @@ fn (mut g Gen) write_types(types []table.TypeSymbol) {
 					g.typedefs.writeln('typedef struct $name $name;')
 				}
 				// TODO avoid buffer manip
-				start_pos := g.type_definitions.len
 				if typ.info.is_union {
 					g.type_definitions.writeln('union $name {')
 				} else {
@@ -5069,13 +5031,12 @@ fn (mut g Gen) write_types(types []table.TypeSymbol) {
 				g.type_definitions.writeln('};')
 				// New
 				// g.type_definitions.writeln('struct $name {')
-				// g.type_definitions.writeln('\t$typ  data;')
-				// g.type_definitions.writeln('\tstring error;')
-				// g.type_definitions.writeln('\tint    ecode;')
 				// g.type_definitions.writeln('\tbool   ok;')
 				// g.type_definitions.writeln('\tbool   is_none;')
+				// g.type_definitions.writeln('\tstring v_error;')
+				// g.type_definitions.writeln('\tint    ecode;')
+				// g.type_definitions.writeln('\t$typ  data;')
 				// g.type_definitions.writeln('};')
-
 			}
 			table.Alias {
 				// table.Alias { TODO
