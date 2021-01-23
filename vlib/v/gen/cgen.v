@@ -5057,16 +5057,15 @@ fn (mut g Gen) write_types(types []table.TypeSymbol) {
 				g.type_definitions.writeln('};\n')
 			}
 			table.Optional {
-				println('# CGEN: optional: $name')
 				g.typedefs.writeln('typedef struct $name $name;')
 				// Current
 				size := if typ.info.typ == table.void_type { 'int' } else { g.typ(typ.info.typ) }
 				g.type_definitions.writeln('struct $name {')
-				g.type_definitions.writeln('\tbyte data[sizeof($size)];')
-				g.type_definitions.writeln('\tstring v_error;')
-				g.type_definitions.writeln('\tint    ecode;')
 				g.type_definitions.writeln('\tbool   ok;')
 				g.type_definitions.writeln('\tbool   is_none;')
+				g.type_definitions.writeln('\tstring v_error;')
+				g.type_definitions.writeln('\tint    ecode;')
+				g.type_definitions.writeln('\tbyte   data[sizeof($size)];')
 				g.type_definitions.writeln('};')
 				// New
 				// g.type_definitions.writeln('struct $name {')

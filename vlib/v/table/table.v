@@ -776,7 +776,6 @@ pub fn (table &Table) has_deep_child_no_ref(ts &TypeSymbol, name string) bool {
 
 pub fn (mut t Table) find_or_register_optional(typ Type) int {
 	sym := t.get_type_symbol(typ)
-	println('# find_or_register_optional: $sym.name')
 	mut base := sym.cname
 	if sym.language == .c {
 		base = base[3..]
