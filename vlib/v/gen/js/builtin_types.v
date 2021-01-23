@@ -167,6 +167,7 @@ pub fn (mut g JsGen) typ(t table.Type) string {
 		}
 		.optional {
 			// TODO ?
+		}
 		.gohandle {
 			panic('TODO: unhandled gohandle in JS')
 		}

@@ -16,8 +16,7 @@ import strings
 pub type Type = int
 
 pub type TypeInfo = Aggregate | Alias | Array | ArrayFixed | Chan | Enum | FnType | GenericStructInst |
-	Interface | Map | MultiReturn | Struct | SumType | Optional
-	GoHandle | Interface | Map | MultiReturn | Struct | SumType
+	GoHandle | Interface | Map | MultiReturn | Optional | Struct | SumType
 
 pub enum Language {
 	v

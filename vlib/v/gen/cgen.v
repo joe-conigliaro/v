@@ -5057,9 +5057,10 @@ fn (mut g Gen) write_types(types []table.TypeSymbol) {
 				g.type_definitions.writeln('};\n')
 			}
 			table.Optional {
+				println('# CGEN: optional: $name')
 				g.typedefs.writeln('typedef struct $name $name;')
 				// Current
-				size := if typ.info.typ == table.void_type { 'int' } else { g.table.get_type_symbol(typ.info.typ).cname }
+				size := if typ.info.typ == table.void_type { 'int' } else { g.typ(typ.info.typ) }
 				g.type_definitions.writeln('struct $name {')
 				g.type_definitions.writeln('\tbyte data[sizeof($size)];')
 				g.type_definitions.writeln('\tstring v_error;')
@@ -5196,6 +5197,9 @@ fn (g &Gen) sort_structs(typesa []table.TypeSymbol) []table.TypeSymbol {
 			}
 			table.Optional {
 				dep := g.table.get_type_symbol(t.info.typ).name
+				if dep in builtins {
+					dep_graph.add(t.name, [])
+				}
 				if dep !in type_names || dep in field_deps {
 					continue
 				}
