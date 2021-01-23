@@ -34,6 +34,8 @@ fn (mut g Gen) gen_json_for_type(typ table.Type) {
 		return
 	}
 	g.json_types << sym.name
+	// manual use of optional, make sure we register it
+	g.table.find_or_register_optional(utyp)
 	// println('gen_json_for_type($sym.name)')
 	// decode_TYPE funcs receive an actual cJSON* object to decode
 	// cJSON_Parse(str) call is added by the compiler

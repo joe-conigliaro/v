@@ -328,9 +328,10 @@ pub fn (mut g Gen) unwrap_generic(typ table.Type) table.Type {
 			}
 		}
 		gt := g.cur_generic_types[0].derive(typ).clear_flag(.generic)
-		g.table.find_or_register_optional(gt)
+		if typ.has_flag(.optional) {
+			g.table.find_or_register_optional(gt.clear_flag(.optional))
+		}
 		return gt
-
 	}
 	return typ
 }
@@ -587,7 +588,9 @@ fn (mut g Gen) fn_call(node ast.CallExpr) {
 			g.is_js_call = false
 			g.writeln(');')
 			tmp2 = g.new_tmp_var()
-			g.writeln('Option_$typ $tmp2 = $fn_name ($json_obj);')
+			println('adding json_decode optional: $typ')
+			g.table.find_or_register_optional(ast_type.typ)
+			g.writeln('Option_$typ $tmp2 = $fn_name ($json_obj); /* HEREA */')
 		}
 		if !g.is_autofree {
 			g.write('cJSON_Delete($json_obj); //del')
