@@ -5121,6 +5121,9 @@ fn (mut g Gen) write_types(types []table.TypeSymbol) {
 				// }
 			}
 			table.MultiReturn {
+				if typ.info.types.filter(it.has_flag(.generic)).len > 0 {
+					continue
+				}
 				g.typedefs.writeln('typedef struct $name $name;')
 				g.type_definitions.writeln('struct $name {')
 				for i, mr_typ in typ.info.types {
