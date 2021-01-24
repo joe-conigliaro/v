@@ -329,7 +329,7 @@ pub fn (mut c Checker) symmetric_check(left table.Type, right table.Type) bool {
 	return c.check_basic(left, right)
 }
 
-pub fn (c &Checker) get_default_fmt(ftyp table.Type, typ table.Type) byte {
+pub fn (mut c Checker) get_default_fmt(ftyp table.Type, typ table.Type) byte {
 	if ftyp.has_flag(.optional) {
 		return `s`
 	} else if typ.is_float() {

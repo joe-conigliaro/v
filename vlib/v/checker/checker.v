@@ -974,6 +974,7 @@ pub fn (mut c Checker) infix_expr(mut infix_expr ast.InfixExpr) table.Type {
 			if left.kind == .chan {
 				chan_info := left.chan_info()
 				elem_type := chan_info.elem_type
+				c.table.find_or_register_optional(elem_type)
 				if !c.check_types(right_type, elem_type) {
 					c.error('cannot push `$right.name` on `$left.name`', right_pos)
 				}
@@ -1661,6 +1662,8 @@ pub fn (mut c Checker) call_fn(mut call_expr ast.CallExpr) table.Type {
 		}
 	}
 	if fn_name == 'json.encode' {
+		typ := c.expr(call_expr.args[0].expr)
+		c.table.find_or_register_optional(typ)
 	} else if fn_name == 'json.decode' && call_expr.args.len > 0 {
 		expr := call_expr.args[0].expr
 		if expr !is ast.Type {
@@ -1674,6 +1677,7 @@ pub fn (mut c Checker) call_fn(mut call_expr ast.CallExpr) table.Type {
 			c.error('json.decode: second argument needs to be a string', call_expr.pos)
 		}
 		typ := expr as ast.Type
+		c.table.find_or_register_optional(typ.typ)
 		ret_type := typ.typ.set_flag(.optional)
 		call_expr.return_type = ret_type
 		return ret_type
@@ -3278,7 +3282,7 @@ fn (mut c Checker) stmts(stmts []ast.Stmt) {
 	c.expected_type = table.void_type
 }
 
-pub fn (c &Checker) unwrap_generic(typ table.Type) table.Type {
+pub fn (mut c Checker) unwrap_generic(typ table.Type) table.Type {
 	if typ.has_flag(.generic) {
 		sym := c.table.get_type_symbol(typ)
 		mut idx := 0
@@ -3288,7 +3292,14 @@ pub fn (c &Checker) unwrap_generic(typ table.Type) table.Type {
 				break
 			}
 		}
-		return c.cur_generic_types[idx].derive(typ).clear_flag(.generic)
+		gt := c.cur_generic_types[idx].derive(typ).clear_flag(.generic)
+		if typ.has_flag(.optional) {
+			c.table.find_or_register_optional(gt.clear_flag(.optional))
+		}
+		return gt
+	}
+	if typ.has_flag(.optional) {
+		c.table.find_or_register_optional(typ.clear_flag(.optional))
 	}
 	return typ
 }

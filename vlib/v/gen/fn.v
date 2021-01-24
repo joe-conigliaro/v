@@ -315,7 +315,7 @@ fn (mut g Gen) call_expr(node ast.CallExpr) {
 	}
 }
 
-pub fn (mut g Gen) unwrap_generic(typ table.Type) table.Type {
+pub fn (g &Gen) unwrap_generic(typ table.Type) table.Type {
 	if typ.has_flag(.generic) {
 		sym := g.table.get_type_symbol(typ)
 		mut idx := 0
@@ -325,11 +325,7 @@ pub fn (mut g Gen) unwrap_generic(typ table.Type) table.Type {
 				break
 			}
 		}
-		gt := g.cur_generic_types[idx].derive(typ).clear_flag(.generic)
-		if typ.has_flag(.optional) {
-			g.table.find_or_register_optional(gt.clear_flag(.optional))
-		}
-		return gt
+		return g.cur_generic_types[idx].derive(typ).clear_flag(.generic)
 	}
 	return typ
 }

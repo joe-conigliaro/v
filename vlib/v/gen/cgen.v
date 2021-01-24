@@ -394,7 +394,7 @@ pub fn (mut g Gen) init() {
 		// _STR functions should not be defined in builtin.o
 		g.write_str_fn_definitions()
 	}
-	// g.write_sorted_types()
+	g.write_sorted_types()
 	// g.write_multi_return_types()
 	g.definitions.writeln('// end of definitions #endif')
 	//
@@ -433,7 +433,6 @@ pub fn (mut g Gen) init() {
 }
 
 pub fn (mut g Gen) finish() {
-	g.write_sorted_types()
 	if g.pref.build_mode != .build_module {
 		g.stringliterals.writeln('}')
 	}
