@@ -77,9 +77,8 @@ pub fn (mut p Parser) parse_map_type() table.Type {
 		// error is reported in parse_type
 		return 0
 	}
-	if !(key_type in [table.string_type_idx, table.voidptr_type_idx] ||
-		(key_type.is_int() && !key_type.is_ptr()))
-	{
+	if !(key_type in [table.string_type_idx, table.voidptr_type_idx]
+		|| (key_type.is_int() && !key_type.is_ptr())) {
 		s := p.table.type_to_str(key_type)
 		p.error_with_pos('maps only support string, integer, rune or voidptr keys for now (not `$s`)',
 			p.tok.position())
@@ -89,6 +88,10 @@ pub fn (mut p Parser) parse_map_type() table.Type {
 	value_type := p.parse_type()
 	if value_type.idx() == 0 {
 		// error is reported in parse_type
+		return 0
+	}
+	if value_type.idx() == table.void_type_idx {
+		p.error_with_pos('map value type cannot be void', p.tok.position())
 		return 0
 	}
 	idx := p.table.find_or_register_map(key_type, value_type)
@@ -124,6 +127,10 @@ pub fn (mut p Parser) parse_multi_return_type() table.Type {
 		}
 	}
 	p.check(.rpar)
+	if mr_types.len == 1 {
+		// no multi return type needed
+		return mr_types[0]
+	}
 	idx := p.table.find_or_register_multi_return(mr_types)
 	return table.new_type(idx)
 }

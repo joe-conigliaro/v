@@ -326,6 +326,17 @@ fn main() {
 }
 ```
 
+The values of multiple variables can be changed in one line.
+In this way, their values can be swapped without an intermediary variable.
+
+```v
+mut a := 0
+mut b := 1
+println('$a, $b') // 0, 1
+a, b = b, a
+println('$a, $b') // 1, 0
+```
+
 ### Declaration errors
 
 In development mode the compiler will warn you that you haven't used the variable
@@ -480,8 +491,9 @@ The compiler takes care of the storage size, so there is no `hd` or `llu`.
 ```v
 x := 123.4567
 println('x = ${x:4.2f}')
-println('[${x:10}]') // pad with spaces on the left
-println('[${int(x):-10}]') // pad with spaces on the right
+println('[${x:10}]') // pad with spaces on the left => [   123.457]
+println('[${int(x):-10}]') // pad with spaces on the right => [123       ]
+println('[${int(x):010}]') // pad with zeros on the left => [0000000123]
 ```
 
 ### String operators
@@ -1839,7 +1851,9 @@ struct Dog {
 	breed string
 }
 
-struct Cat {}
+struct Cat {
+	breed string
+}
 
 fn (d Dog) speak() string {
 	return 'woof'
@@ -1849,30 +1863,32 @@ fn (c Cat) speak() string {
 	return 'meow'
 }
 
+// unlike Go and like TypeScript, V's interfaces can define fields, not just methods.
 interface Speaker {
+	breed string
 	speak() string
 }
 
 dog := Dog{'Leonberger'}
-cat := Cat{}
+cat := Cat{'Siamese'}
 mut arr := []Speaker{}
 arr << dog
 arr << cat
 for item in arr {
-	item.speak()
+	println('a $item.breed ${typeof(item).name} says: $item.speak()')
 }
 ```
 
-A type implements an interface by implementing its methods.
+A type implements an interface by implementing its methods and fields.
 There is no explicit declaration of intent, no "implements" keyword.
 
 We can test the underlying type of an interface using dynamic cast operators:
 ```v oksyntax
 fn announce(s Speaker) {
 	if s is Dog {
-		println('a $s.breed') // `s` is automatically cast to `Dog` (smart cast)
+		println('a $s.breed dog') // `s` is automatically cast to `Dog` (smart cast)
 	} else if s is Cat {
-		println('a cat')
+		println('a $s.breed cat')
 	} else {
 		println('something else')
 	}
@@ -2092,9 +2108,7 @@ fn (r Repo) find_user_by_id(id int) ?User {
 
 fn main() {
 	repo := Repo{
-		users: [User{1, 'Andrew'}, User{2, 'Bob'},
-			User{10, 'Charles'},
-		]
+		users: [User{1, 'Andrew'}, User{2, 'Bob'}, User{10, 'Charles'}]
 	}
 	user := repo.find_user_by_id(10) or { // Option types must be handled by `or` blocks
 		return
@@ -3148,6 +3162,8 @@ use `v help`, `v help build` and `v help build-c`.
 ## Conditional compilation
 
 ### Compile time code
+
+`$` is used as a prefix for compile-time operations.
 
 #### $if
 ```v
