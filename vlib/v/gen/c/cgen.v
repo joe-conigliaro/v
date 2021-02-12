@@ -651,6 +651,7 @@ fn (g &Gen) cc_type2(t table.Type) string {
 	// TODO: this needs to be removed; cgen shouldn't resolve generic types (job of checker)
 	if mut sym.info is table.Struct {
 		if sym.info.generic_types.len > 0 {
+			panic('SPONGE: $sym.name')
 			mut sgtyps := '_T'
 			for gt in sym.info.generic_types {
 				gts := g.table.get_type_symbol(if gt.has_flag(.generic) {
@@ -737,7 +738,7 @@ pub fn (mut g Gen) write_typedef_types() {
 				if typ.name != 'chan' {
 					g.type_definitions.writeln('typedef chan $typ.cname;')
 					chan_inf := typ.chan_info()
-					chan_elem_type := chan_inf.elem_type
+					chan_elem_type := g.unwrap_generic(chan_inf.elem_type)
 					if !chan_elem_type.has_flag(.generic) {
 						el_stype := g.typ(chan_elem_type)
 						g.channel_definitions.writeln('
@@ -5670,7 +5671,7 @@ fn (mut g Gen) type_default(typ_ table.Type) string {
 		else {}
 	}
 	if sym.kind == .chan {
-		elemtypstr := g.typ(sym.chan_info().elem_type)
+		elemtypstr := g.typ(g.unwrap_generic(sym.chan_info().elem_type))
 		return 'sync__new_channel_st(0, sizeof($elemtypstr))'
 	}
 	return match sym.kind {
