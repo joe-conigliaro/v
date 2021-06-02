@@ -32,7 +32,7 @@ pub fn qualify_module(pref &pref.Preferences, mod string, file_path string) stri
 	if mod == 'main' {
 		return mod
 	}
-	clean_file_path := file_path.all_before_last('/')
+	clean_file_path := file_path.all_before_last(os.path_separator)
 	// relative module (relative to working directory)
 	// TODO: find most stable solution & test with -usecache
 	if clean_file_path.replace(os.getwd() + os.path_separator, '') == mod {
@@ -68,6 +68,10 @@ pub fn mod_path_to_full_name(pref &pref.Preferences, mod string, path string) ?s
 	}
 	path_parts := path.split(os.path_separator)
 	mod_path := mod.replace('.', os.path_separator)
+	mut pref_path := os.real_path(pref.path)
+	if pref_path.ends_with('.v') {
+		pref_path = os.dir(pref_path)
+	}
 	// go back through each parent in path_parts and join with `mod_path` to see the dir exists
 	for i := path_parts.len - 1; i >= 0; i-- {
 		try_path := os.join_path(path_parts[0..i].join(os.path_separator), mod_path)
@@ -106,6 +110,10 @@ pub fn mod_path_to_full_name(pref &pref.Preferences, mod string, path string) ?s
 				if last_v_mod > -1 {
 					mod_full_name := try_path_parts[last_v_mod..].join('.')
 					return mod_full_name
+				}
+				// relative (which don't require v.mod files)
+				if try_path.starts_with(pref_path) {
+					return try_path.replace(pref_path+os.path_separator, '').replace(os.path_separator, '.')
 				}
 			}
 		}
